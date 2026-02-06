@@ -1,14 +1,14 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import "./App.css";
+import "./app.css";
 import { AuthProvider } from "./state/auth";
-import { LandingPage } from "./routes/LandingPage";
-import { LoginPage } from "./routes/LoginPage";
-import { SignupPage } from "./routes/SignupPage";
-import { DashboardLayout } from "./routes/DashboardLayout";
-import { DashboardHome } from "./routes/DashboardHome";
-import { QuotesPage } from "./routes/QuotesPage";
-import { ApiKeysPage } from "./routes/ApiKeysPage";
-import { ApiDocsPage } from "./routes/ApiDocsPage";
+import { LandingPage } from "./routes/landing-page";
+import { LoginPage } from "./routes/login-page";
+import { SignupPage } from "./routes/signup-page";
+import { DashboardLayout } from "./routes/dashboard-layout";
+import { DashboardHome } from "./routes/dashboard-home";
+import { QuotesPage } from "./routes/quotes-page";
+import { ApiKeysPage } from "./routes/api-keys-page";
+import { ApiDocsPage } from "./routes/api-docs-page";
 
 const App = () => {
   return (

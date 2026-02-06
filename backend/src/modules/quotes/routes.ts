@@ -4,7 +4,7 @@ import { z } from "zod";
 import { db } from "../../db/drizzle";
 import { quotes } from "../../db/schema";
 import { AuthenticatedRequest, requireAuth } from "../../middleware/auth";
-import { ApiUserRequest, requireApiKey } from "../../middleware/apiKey";
+import { ApiUserRequest, requireApiKey } from "../../middleware/api-key";
 import { and, desc, eq, lt } from "drizzle-orm";
 
 const router = Router();

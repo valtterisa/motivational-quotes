@@ -2,9 +2,9 @@ import express, { type Request, type Response } from "express";
 import cors from "cors";
 import helmet from "helmet";
 import { authRouter } from "./modules/auth/routes";
-import { apiKeysRouter } from "./modules/apiKeys/routes";
+import { apiKeysRouter } from "./modules/api-keys/routes";
 import { quotesRouter } from "./modules/quotes/routes";
-import { apiRateLimit, authRateLimit } from "./middleware/rateLimit";
+import { apiRateLimit, authRateLimit } from "./middleware/rate-limit";
 import { errorHandler } from "./middleware/error";
 
 export const createApp = () => {
