@@ -1,20 +1,15 @@
 import { useState, type ReactNode } from "react";
-import { AuthContext } from "./auth-context";
-
-interface User {
-  id: string;
-  email: string;
-}
+import { AuthContext, type User } from "./auth-context";
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [user, setUser] = useState<User | null>(() => {
+  const getInitialAuth = () => {
     const stored = localStorage.getItem("auth");
-    return stored ? JSON.parse(stored).user : null;
-  });
-  const [token, setToken] = useState<string | null>(() => {
-    const stored = localStorage.getItem("auth");
-    return stored ? JSON.parse(stored).token : null;
-  });
+    return stored ? JSON.parse(stored) : { user: null, token: null };
+  };
+
+  const initialAuth = getInitialAuth();
+  const [user, setUser] = useState<User | null>(initialAuth.user);
+  const [token, setToken] = useState<string | null>(initialAuth.token);
 
   const setAuth = (u: User, t: string) => {
     setUser(u);
