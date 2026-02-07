@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { useMutation } from "@tanstack/react-query";
 import { useAuth } from "../state/auth";
 import { apiCall } from "../lib/api";
 
@@ -8,22 +9,27 @@ export const SignupPage = () => {
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-    try {
-      const data = await apiCall("/auth/signup", {
-        method: "POST",
-        body: JSON.stringify({ email, password }),
-      });
+  const signup = useMutation({
+    mutationFn: (body: { email: string; password: string }) =>
+      apiCall<{ user: { id: string; email: string }; token: string }>(
+        "/auth/signup",
+        { method: "POST", body: JSON.stringify(body) },
+      ),
+    onSuccess: (data) => {
       setAuth(data.user, data.token);
       navigate("/dashboard");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Signup failed");
-    }
+    },
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    signup.mutate({ email, password });
   };
+
+  const error = signup.isError
+    ? signup.error instanceof Error ? signup.error.message : "Signup failed"
+    : null;
 
   return (
     <div className="page auth">
@@ -49,8 +55,8 @@ export const SignupPage = () => {
             minLength={8}
           />
         </label>
-        <button type="submit" className="btn primary">
-          Create account
+        <button type="submit" className="btn primary" disabled={signup.isPending}>
+          {signup.isPending ? "Creating account..." : "Create account"}
         </button>
       </form>
       <p>

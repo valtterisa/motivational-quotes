@@ -81,7 +81,11 @@ router.post(
       return res.status(401).json({ error: "unauthorized" });
     }
 
-    const { id } = req.params;
+    const rawId = req.params.id;
+    const id = typeof rawId === "string" ? rawId : rawId?.[0];
+    if (!id) {
+      return res.status(400).json({ error: "invalid_id" });
+    }
 
     await db
       .update(apiKeys)

@@ -127,7 +127,11 @@ router.put(
       return res.status(401).json({ error: "unauthorized" });
     }
 
-    const { id } = req.params;
+    const rawId = req.params.id;
+    const id = typeof rawId === "string" ? rawId : rawId?.[0];
+    if (!id) {
+      return res.status(400).json({ error: "invalid_id" });
+    }
     const parsed = updateQuoteSchema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({ error: "invalid_body" });
@@ -155,7 +159,11 @@ router.delete(
       return res.status(401).json({ error: "unauthorized" });
     }
 
-    const { id } = req.params;
+    const rawId = req.params.id;
+    const id = typeof rawId === "string" ? rawId : rawId?.[0];
+    if (!id) {
+      return res.status(400).json({ error: "invalid_id" });
+    }
 
     const [deleted] = await db
       .delete(quotes)

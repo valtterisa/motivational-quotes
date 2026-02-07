@@ -1,6 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../state/auth";
-import { apiCall } from "../lib/api";
+import { apiCall, queryKeys } from "../lib/api";
 
 interface ApiKey {
   id: string;
@@ -11,58 +12,56 @@ interface ApiKey {
 
 export const ApiKeysPage = () => {
   const { token } = useAuth();
-  const [keys, setKeys] = useState<ApiKey[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [newLabel, setNewLabel] = useState("");
   const [createdKey, setCreatedKey] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!token) return;
-    apiCall("/dashboard/api-keys", { token })
-      .then((data: { keys: ApiKey[] }) => {
-        setKeys(data.keys);
-        setLoading(false);
-      })
-      .catch(() => setLoading(false));
-  }, [token]);
+  const { data, isLoading } = useQuery({
+    queryKey: [...queryKeys.dashboard.apiKeys(), token ?? ""],
+    queryFn: () =>
+      apiCall<{ keys: ApiKey[] }>("/dashboard/api-keys", { token: token ?? undefined }),
+    enabled: !!token,
+  });
 
-  const handleCreate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!token || !newLabel) return;
-    try {
-      const data = await apiCall("/dashboard/api-keys", {
+  const createKey = useMutation({
+    mutationFn: (label: string) =>
+      apiCall<{ token: string }>("/dashboard/api-keys", {
         method: "POST",
-        token,
-        body: JSON.stringify({ label: newLabel }),
-      });
+        token: token ?? undefined,
+        body: JSON.stringify({ label }),
+      }),
+    onSuccess: (data) => {
       setCreatedKey(data.token);
       setNewLabel("");
-      if (token) {
-        const updated = await apiCall("/dashboard/api-keys", { token });
-        setKeys(updated.keys);
-      }
-    } catch (err) {
-      // eslint-disable-next-line no-console
-      console.error(err);
-    }
-  };
+      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.apiKeys() });
+    },
+  });
 
-  const handleRevoke = async (id: string) => {
-    if (!token) return;
-    try {
-      await apiCall(`/dashboard/api-keys/${id}/revoke`, {
+  const revokeKey = useMutation({
+    mutationFn: (id: string) =>
+      apiCall(`/dashboard/api-keys/${id}/revoke`, {
         method: "POST",
-        token,
-      });
-      const updated = await apiCall("/dashboard/api-keys", { token });
-      setKeys(updated.keys);
-    } catch (err) {
-      // eslint-disable-next-line no-console
-      console.error(err);
-    }
+        token: token ?? undefined,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.apiKeys() });
+    },
+  });
+
+  const keys = data?.keys ?? [];
+
+  const handleCreate = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!token || !newLabel) return;
+    createKey.mutate(newLabel);
   };
 
-  if (loading) return <div>Loading...</div>;
+  const handleRevoke = (id: string) => {
+    if (!token) return;
+    revokeKey.mutate(id);
+  };
+
+  if (isLoading) return <div>Loading...</div>;
 
   return (
     <div>

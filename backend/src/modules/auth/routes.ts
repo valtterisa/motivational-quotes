@@ -22,9 +22,11 @@ router.post("/signup", async (req: Request, res: Response) => {
 
   const { email, password } = result.data;
 
-  const existing = await db.query.users.findFirst({
-    where: (u, { eq: eqOp }) => eqOp(u.email, email),
-  });
+  const [existing] = await db
+    .select()
+    .from(users)
+    .where(eq(users.email, email))
+    .limit(1);
   if (existing) {
     return res.status(409).json({ error: "email_in_use" });
   }
@@ -52,9 +54,11 @@ router.post("/login", async (req: Request, res: Response) => {
 
   const { email, password } = result.data;
 
-  const user = await db.query.users.findFirst({
-    where: (u, { eq: eqOp }) => eqOp(u.email, email),
-  });
+  const [user] = await db
+    .select()
+    .from(users)
+    .where(eq(users.email, email))
+    .limit(1);
 
   if (!user) {
     return res.status(401).json({ error: "invalid_credentials" });

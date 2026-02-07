@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import "./app.css";
 import { AuthProvider } from "./state/auth";
@@ -10,10 +11,13 @@ import { QuotesPage } from "./routes/quotes-page";
 import { ApiKeysPage } from "./routes/api-keys-page";
 import { ApiDocsPage } from "./routes/api-docs-page";
 
+const queryClient = new QueryClient();
+
 const App = () => {
   return (
-    <AuthProvider>
-      <BrowserRouter>
+    <QueryClientProvider client={queryClient}>
+      <AuthProvider>
+        <BrowserRouter>
         <Routes>
           <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<LoginPage />} />
@@ -25,8 +29,9 @@ const App = () => {
             <Route path="docs" element={<ApiDocsPage />} />
           </Route>
         </Routes>
-      </BrowserRouter>
-    </AuthProvider>
+        </BrowserRouter>
+      </AuthProvider>
+    </QueryClientProvider>
   );
 };
 

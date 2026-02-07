@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "../state/auth";
-import { apiCall } from "../lib/api";
+import { apiCall, queryKeys } from "../lib/api";
 
 interface Quote {
   id: string;
@@ -11,25 +11,18 @@ interface Quote {
 
 export const QuotesPage = () => {
   const { token } = useAuth();
-  const [quotes, setQuotes] = useState<Quote[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!token) return;
-    apiCall("/dashboard/quotes", { token })
-      .then((data: { items: Quote[] }) => {
-        setQuotes(data.items);
-        setLoading(false);
-      })
-      .catch((err) => {
-        setError(err.message);
-        setLoading(false);
-      });
-  }, [token]);
+  const { data, isLoading, isError, error } = useQuery({
+    queryKey: [...queryKeys.dashboard.quotes(), token ?? ""],
+    queryFn: () =>
+      apiCall<{ items: Quote[] }>("/dashboard/quotes", { token: token ?? undefined }),
+    enabled: !!token,
+  });
 
-  if (loading) return <div>Loading...</div>;
-  if (error) return <div>Error: {error}</div>;
+  const quotes = data?.items ?? [];
+
+  if (isLoading) return <div>Loading...</div>;
+  if (isError) return <div>Error: {error?.message}</div>;
 
   return (
     <div>
