@@ -1,6 +1,7 @@
 import express, { type Request, type Response } from "express";
 import cors from "cors";
 import helmet from "helmet";
+import cookieParser from "cookie-parser";
 import { authRouter } from "./modules/auth/routes";
 import { apiKeysRouter } from "./modules/api-keys/routes";
 import { quotesRouter } from "./modules/quotes/routes";
@@ -20,6 +21,7 @@ export const createApp = () => {
     }),
   );
   app.use(express.json());
+  app.use(cookieParser());
 
   app.get("/health", (_req: Request, res: Response) => {
     res.json({ ok: true });

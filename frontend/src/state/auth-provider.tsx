@@ -1,30 +1,44 @@
-import { useState, type ReactNode } from "react";
+import { useState, useEffect, type ReactNode } from "react";
 import { AuthContext, type User } from "./auth-context";
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const getInitialAuth = () => {
-    const stored = localStorage.getItem("auth");
-    return stored ? JSON.parse(stored) : { user: null, token: null };
-  };
+  const [user, setUser] = useState<User | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const initialAuth = getInitialAuth();
-  const [user, setUser] = useState<User | null>(initialAuth.user);
-  const [token, setToken] = useState<string | null>(initialAuth.token);
+  // Fetch current user on mount
+  useEffect(() => {
+    const fetchUser = async () => {
+      try {
+        const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:3001";
+        const res = await fetch(`${API_BASE}/auth/me`, {
+          credentials: "include",
+        });
+        
+        if (res.ok) {
+          const data = await res.json();
+          setUser(data.user);
+        }
+      } catch (error) {
+        // User not authenticated, that's okay
+        console.debug("Not authenticated", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
 
-  const setAuth = (u: User, t: string) => {
+    fetchUser();
+  }, []);
+
+  const setAuth = (u: User) => {
     setUser(u);
-    setToken(t);
-    localStorage.setItem("auth", JSON.stringify({ user: u, token: t }));
   };
 
   const clearAuth = () => {
     setUser(null);
-    setToken(null);
-    localStorage.removeItem("auth");
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, setAuth, clearAuth }}>
+    <AuthContext.Provider value={{ user, setAuth, clearAuth, isLoading }}>
       {children}
     </AuthContext.Provider>
   );

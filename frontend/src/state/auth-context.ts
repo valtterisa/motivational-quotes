@@ -7,9 +7,9 @@ export interface User {
 
 interface AuthContextType {
   user: User | null;
-  token: string | null;
-  setAuth: (user: User, token: string) => void;
+  setAuth: (user: User) => void;
   clearAuth: () => void;
+  isLoading: boolean;
 }
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);

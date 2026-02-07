@@ -44,12 +44,19 @@ export const requireAuth = async (
   res: Response,
   next: NextFunction,
 ) => {
-  const header = req.header("authorization");
-  if (!header?.startsWith("Bearer ")) {
-    return res.status(401).json({ error: "missing_token" });
+  // Try to get token from cookie first, then fall back to Authorization header
+  let token = req.cookies?.access_token;
+  
+  if (!token) {
+    const header = req.header("authorization");
+    if (header?.startsWith("Bearer ")) {
+      token = header.slice("Bearer ".length);
+    }
   }
 
-  const token = header.slice("Bearer ".length);
+  if (!token) {
+    return res.status(401).json({ error: "missing_token" });
+  }
 
   try {
     const decoded = jwt.verify(token, env.JWT_SECRET) as TokenPayload;

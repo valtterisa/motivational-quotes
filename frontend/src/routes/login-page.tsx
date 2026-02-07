@@ -24,12 +24,12 @@ export const LoginPage = () => {
 
   const login = useMutation({
     mutationFn: (body: { email: string; password: string }) =>
-      apiCall<{ user: { id: string; email: string }; token: string }>(
+      apiCall<{ user: { id: string; email: string } }>(
         "/auth/login",
         { method: "POST", body: JSON.stringify(body) },
       ),
     onSuccess: (data) => {
-      setAuth(data.user, data.token);
+      setAuth(data.user);
       navigate("/dashboard");
     },
   });

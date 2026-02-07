@@ -9,12 +9,14 @@ export const apiCall = async <T = unknown>(
     "Content-Type": "application/json",
     ...(rest.headers as Record<string, string>),
   };
+  // Keep backward compatibility for API keys that might still use token
   if (token) {
     headers.Authorization = `Bearer ${token}`;
   }
   const res = await fetch(`${API_BASE}${path}`, {
     ...rest,
     headers,
+    credentials: "include", // Important: include cookies in requests
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: "unknown_error" }));
