@@ -1,6 +1,21 @@
 import { useQuery } from "@tanstack/react-query";
-import { useAuth } from "../state/auth";
-import { apiCall, queryKeys } from "../lib/api";
+import { useAuth } from "@/state/auth";
+import { apiCall, queryKeys } from "@/lib/api";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface Quote {
   id: string;
@@ -21,30 +36,49 @@ export const QuotesPage = () => {
 
   const quotes = data?.items ?? [];
 
-  if (isLoading) return <div>Loading...</div>;
-  if (isError) return <div>Error: {error?.message}</div>;
+  if (isLoading) {
+    return (
+      <Card>
+        <CardContent className="py-8">
+          <p className="text-muted-foreground text-sm">Loading...</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (isError) {
+    return (
+      <Alert variant="destructive">
+        <AlertDescription>Error: {error?.message}</AlertDescription>
+      </Alert>
+    );
+  }
 
   return (
-    <div>
-      <h1>Your Quotes</h1>
-      <table>
-        <thead>
-          <tr>
-            <th>Text</th>
-            <th>Author</th>
-            <th>Created</th>
-          </tr>
-        </thead>
-        <tbody>
-          {quotes.map((q) => (
-            <tr key={q.id}>
-              <td>{q.text}</td>
-              <td>{q.author || "-"}</td>
-              <td>{new Date(q.createdAt).toLocaleDateString()}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <Card>
+      <CardHeader>
+        <CardTitle>Your Quotes</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Text</TableHead>
+              <TableHead>Author</TableHead>
+              <TableHead>Created</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {quotes.map((q) => (
+              <TableRow key={q.id}>
+                <TableCell>{q.text}</TableCell>
+                <TableCell>{q.author || "—"}</TableCell>
+                <TableCell>{new Date(q.createdAt).toLocaleDateString()}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </CardContent>
+    </Card>
   );
 };
