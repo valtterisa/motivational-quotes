@@ -14,11 +14,13 @@ const authSchema = z.object({
   password: z.string().min(8),
 });
 
+const COOKIE_MAX_AGE = 60 * 60 * 1000; // 1 hour
+
 const COOKIE_OPTIONS = {
   httpOnly: true,
   secure: process.env.NODE_ENV === "production",
   sameSite: "lax" as const,
-  maxAge: 60 * 60 * 1000, // 1 hour
+  maxAge: COOKIE_MAX_AGE,
 };
 
 router.post("/signup", async (req: Request, res: Response) => {
@@ -101,9 +103,9 @@ router.get("/me", requireAuth, async (req: AuthenticatedRequest, res: Response) 
 router.post("/logout", requireAuth, async (req: AuthenticatedRequest, res: Response) => {
   // Clear the cookie
   res.clearCookie("access_token", {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax" as const,
+    httpOnly: COOKIE_OPTIONS.httpOnly,
+    secure: COOKIE_OPTIONS.secure,
+    sameSite: COOKIE_OPTIONS.sameSite,
   });
 
   return res.json({ success: true });
