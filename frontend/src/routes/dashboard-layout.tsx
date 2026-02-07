@@ -1,14 +1,21 @@
 import { Link, Outlet, useNavigate } from "react-router-dom";
-import { useAuth } from "@/state/auth";
+import { useAuth } from "@/state/use-auth";
+import { apiCall } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 
 export const DashboardLayout = () => {
   const { user, clearAuth } = useAuth();
   const navigate = useNavigate();
 
-  const handleLogout = () => {
-    clearAuth();
-    navigate("/");
+  const handleLogout = async () => {
+    try {
+      await apiCall("/auth/logout", { method: "POST" });
+    } catch (error) {
+      console.error("Logout error:", error);
+    } finally {
+      clearAuth();
+      navigate("/");
+    }
   };
 
   return (

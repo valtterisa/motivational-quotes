@@ -4,7 +4,7 @@ import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { db } from "../../db/drizzle";
 import { users } from "../../db/schema";
-import { signAccessToken } from "../../middleware/auth";
+import { signAccessToken, requireAuth, type AuthenticatedRequest } from "../../middleware/auth";
 import { eq } from "drizzle-orm";
 
 const router = Router();
@@ -13,6 +13,15 @@ const authSchema = z.object({
   email: z.string().email(),
   password: z.string().min(8),
 });
+
+const COOKIE_MAX_AGE = 60 * 60 * 1000; // 1 hour
+
+const COOKIE_OPTIONS = {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === "production",
+  sameSite: "strict" as const, // Strict mode provides better CSRF protection
+  maxAge: COOKIE_MAX_AGE,
+};
 
 router.post("/signup", async (req: Request, res: Response) => {
   const result = authSchema.safeParse(req.body);
@@ -40,9 +49,11 @@ router.post("/signup", async (req: Request, res: Response) => {
 
   const token = signAccessToken({ id: created.id, email: created.email, role: created.role });
 
+  // Set HTTP-only cookie
+  res.cookie("access_token", token, COOKIE_OPTIONS);
+
   return res.status(201).json({
     user: { id: created.id, email: created.email, role: created.role },
-    token,
   });
 });
 
@@ -71,10 +82,33 @@ router.post("/login", async (req: Request, res: Response) => {
 
   const token = signAccessToken({ id: user.id, email: user.email, role: user.role });
 
+  // Set HTTP-only cookie
+  res.cookie("access_token", token, COOKIE_OPTIONS);
+
   return res.json({
     user: { id: user.id, email: user.email, role: user.role },
-    token,
   });
+});
+
+router.get("/me", requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+  if (!req.user) {
+    return res.status(401).json({ error: "unauthorized" });
+  }
+
+  return res.json({
+    user: { id: req.user.id, email: req.user.email, role: req.user.role },
+  });
+});
+
+router.post("/logout", requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+  // Clear the cookie
+  res.clearCookie("access_token", {
+    httpOnly: COOKIE_OPTIONS.httpOnly,
+    secure: COOKIE_OPTIONS.secure,
+    sameSite: COOKIE_OPTIONS.sameSite,
+  });
+
+  return res.json({ success: true });
 });
 
 export const authRouter = router;

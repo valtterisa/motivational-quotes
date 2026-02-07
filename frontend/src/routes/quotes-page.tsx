@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useAuth } from "@/state/auth";
+import { useAuth } from "@/state/use-auth";
 import { apiCall, queryKeys } from "@/lib/api";
 import {
   Card,
@@ -25,13 +25,13 @@ interface Quote {
 }
 
 export const QuotesPage = () => {
-  const { token } = useAuth();
+  const { user } = useAuth();
 
   const { data, isLoading, isError, error } = useQuery({
-    queryKey: [...queryKeys.dashboard.quotes(), token ?? ""],
+    queryKey: queryKeys.dashboard.quotes(),
     queryFn: () =>
-      apiCall<{ items: Quote[] }>("/dashboard/quotes", { token: token ?? undefined }),
-    enabled: !!token,
+      apiCall<{ items: Quote[] }>("/dashboard/quotes"),
+    enabled: !!user,
   });
 
   const quotes = data?.items ?? [];

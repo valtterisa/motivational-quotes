@@ -1,4 +1,3 @@
-import { useAuth } from "@/state/auth";
 import {
   Card,
   CardContent,
@@ -7,8 +6,7 @@ import {
 } from "@/components/ui/card";
 
 export const ApiDocsPage = () => {
-  const { token } = useAuth();
-  const apiKey = token ? "your-api-key-here" : "";
+  const apiKey = "your-api-key-here";
 
   return (
     <div className="space-y-6 max-w-3xl">

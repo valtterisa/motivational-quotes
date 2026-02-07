@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useAuth } from "@/state/auth";
+import { useAuth } from "@/state/use-auth";
 import { apiCall, queryKeys } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,23 +29,22 @@ interface ApiKey {
 }
 
 export const ApiKeysPage = () => {
-  const { token } = useAuth();
+  const { user } = useAuth();
   const queryClient = useQueryClient();
   const [newLabel, setNewLabel] = useState("");
   const [createdKey, setCreatedKey] = useState<string | null>(null);
 
   const { data, isLoading } = useQuery({
-    queryKey: [...queryKeys.dashboard.apiKeys(), token ?? ""],
+    queryKey: queryKeys.dashboard.apiKeys(),
     queryFn: () =>
-      apiCall<{ keys: ApiKey[] }>("/dashboard/api-keys", { token: token ?? undefined }),
-    enabled: !!token,
+      apiCall<{ keys: ApiKey[] }>("/dashboard/api-keys"),
+    enabled: !!user,
   });
 
   const createKey = useMutation({
     mutationFn: (label: string) =>
       apiCall<{ token: string }>("/dashboard/api-keys", {
         method: "POST",
-        token: token ?? undefined,
         body: JSON.stringify({ label }),
       }),
     onSuccess: (data) => {
@@ -59,7 +58,6 @@ export const ApiKeysPage = () => {
     mutationFn: (id: string) =>
       apiCall(`/dashboard/api-keys/${id}/revoke`, {
         method: "POST",
-        token: token ?? undefined,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.apiKeys() });
@@ -70,12 +68,12 @@ export const ApiKeysPage = () => {
 
   const handleCreate = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!token || !newLabel) return;
+    if (!user || !newLabel) return;
     createKey.mutate(newLabel);
   };
 
   const handleRevoke = (id: string) => {
-    if (!token) return;
+    if (!user) return;
     revokeKey.mutate(id);
   };
 

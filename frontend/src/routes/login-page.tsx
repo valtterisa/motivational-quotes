@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useMutation } from "@tanstack/react-query";
-import { useAuth } from "@/state/auth";
+import { useAuth } from "@/state/use-auth";
 import { apiCall } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,12 +24,12 @@ export const LoginPage = () => {
 
   const login = useMutation({
     mutationFn: (body: { email: string; password: string }) =>
-      apiCall<{ user: { id: string; email: string }; token: string }>(
+      apiCall<{ user: { id: string; email: string } }>(
         "/auth/login",
         { method: "POST", body: JSON.stringify(body) },
       ),
     onSuccess: (data) => {
-      setAuth(data.user, data.token);
+      setAuth(data.user);
       navigate("/dashboard");
     },
   });
