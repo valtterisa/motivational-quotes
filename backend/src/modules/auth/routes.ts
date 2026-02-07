@@ -19,7 +19,7 @@ const COOKIE_MAX_AGE = 60 * 60 * 1000; // 1 hour
 const COOKIE_OPTIONS = {
   httpOnly: true,
   secure: process.env.NODE_ENV === "production",
-  sameSite: "lax" as const,
+  sameSite: "strict" as const, // Strict mode provides better CSRF protection
   maxAge: COOKIE_MAX_AGE,
 };
 
