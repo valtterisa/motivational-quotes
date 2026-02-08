@@ -1,13 +1,14 @@
-import type { Response } from "express";
-import { Router } from "express";
+import type { FastifyInstance, FastifyPluginOptions } from "fastify";
 import { z } from "zod";
-import { db } from "../../db/drizzle";
+import { db, dbRead } from "../../db/drizzle";
 import { quotes } from "../../db/schema";
-import { AuthenticatedRequest, requireAuth } from "../../middleware/auth";
-import { ApiUserRequest, requireApiKey } from "../../middleware/api-key";
+import { redisClient } from "../../redis/client";
+import { requireAuth } from "../../middleware/auth";
+import { requireApiKey } from "../../middleware/api-key";
 import { and, desc, eq, lt } from "drizzle-orm";
 
-const router = Router();
+const RANDOM_QUOTE_CACHE_KEY = "quotes:random";
+const RANDOM_QUOTE_CACHE_TTL_SEC = 60;
 
 const createQuoteSchema = z.object({
   text: z.string().min(1),
@@ -25,40 +26,66 @@ const listQuerySchema = z.object({
     .optional(),
 });
 
-router.get(
-  "/quotes/random",
-  requireApiKey,
-  async (_req: ApiUserRequest, res: Response) => {
-    const allRows = await db.select().from(quotes);
-    if (allRows.length === 0) {
-      return res.status(404).json({ error: "no_quotes" });
-    }
-    const randomIndex = Math.floor(Math.random() * allRows.length);
-    return res.json(allRows[randomIndex]);
-  },
-);
+export async function quotesRoutes(
+  fastify: FastifyInstance,
+  _opts: FastifyPluginOptions,
+) {
+  fastify.get(
+    "/quotes/random",
+    { preHandler: [requireApiKey] },
+    async (_request, reply) => {
+      if (redisClient.isOpen) {
+        try {
+          const cached = await redisClient.get(RANDOM_QUOTE_CACHE_KEY);
+          if (cached) {
+            return reply.send(JSON.parse(cached) as unknown);
+          }
+        } catch {
+          // ignore cache errors, fall through to DB
+        }
+      }
 
-router.get(
-  "/quotes",
-  requireApiKey,
-  async (req: ApiUserRequest, res: Response) => {
-    const parsed = listQuerySchema.safeParse(req.query);
+      const allRows = await dbRead.select().from(quotes);
+      if (allRows.length === 0) {
+        return reply.code(404).send({ error: "no_quotes" });
+      }
+      const randomIndex = Math.floor(Math.random() * allRows.length);
+      const quote = allRows[randomIndex];
+
+      if (redisClient.isOpen) {
+        try {
+          await redisClient.set(
+            RANDOM_QUOTE_CACHE_KEY,
+            JSON.stringify(quote),
+            { EX: RANDOM_QUOTE_CACHE_TTL_SEC },
+          );
+        } catch {
+          // ignore
+        }
+      }
+
+      return reply.send(quote);
+    },
+  );
+
+  fastify.get("/feed", async (request, reply) => {
+    const parsed = listQuerySchema.safeParse(request.query);
     if (!parsed.success) {
-      return res.status(400).json({ error: "invalid_query" });
+      return reply.code(400).send({ error: "invalid_query" });
     }
     const { cursor, limit } = parsed.data;
     const pageSize = limit ?? 20;
 
     let rows;
     if (cursor) {
-      rows = await db
+      rows = await dbRead
         .select()
         .from(quotes)
         .where(lt(quotes.id, cursor))
         .orderBy(desc(quotes.createdAt), desc(quotes.id))
         .limit(pageSize + 1);
     } else {
-      rows = await db
+      rows = await dbRead
         .select()
         .from(quotes)
         .orderBy(desc(quotes.createdAt), desc(quotes.id))
@@ -67,116 +94,155 @@ router.get(
 
     const hasNext = rows.length > pageSize;
     const items = hasNext ? rows.slice(0, pageSize) : rows;
-    const nextCursor = hasNext ? items[items.length - 1]?.id : null;
+    const nextCursor = hasNext ? items[items.length - 1]?.id ?? null : null;
 
-    return res.json({
-      items,
-      nextCursor,
-    });
-  },
-);
+    return reply.send({ items, nextCursor });
+  });
 
-router.get(
-  "/dashboard/quotes",
-  requireAuth,
-  async (req: AuthenticatedRequest, res: Response) => {
-    if (!req.user) {
-      return res.status(401).json({ error: "unauthorized" });
-    }
+  fastify.get(
+    "/quotes",
+    { preHandler: [requireApiKey] },
+    async (request, reply) => {
+      const parsed = listQuerySchema.safeParse(request.query);
+      if (!parsed.success) {
+        return reply.code(400).send({ error: "invalid_query" });
+      }
+      const { cursor, limit } = parsed.data;
+      const pageSize = limit ?? 20;
 
-    const rows = await db
-      .select()
-      .from(quotes)
-      .where(eq(quotes.createdBy, req.user.id));
+      let rows;
+      if (cursor) {
+        rows = await dbRead
+          .select()
+          .from(quotes)
+          .where(lt(quotes.id, cursor))
+          .orderBy(desc(quotes.createdAt), desc(quotes.id))
+          .limit(pageSize + 1);
+      } else {
+        rows = await dbRead
+          .select()
+          .from(quotes)
+          .orderBy(desc(quotes.createdAt), desc(quotes.id))
+          .limit(pageSize + 1);
+      }
 
-    return res.json({ items: rows });
-  },
-);
+      const hasNext = rows.length > pageSize;
+      const items = hasNext ? rows.slice(0, pageSize) : rows;
+      const nextCursor = hasNext ? items[items.length - 1]?.id ?? null : null;
 
-router.post(
-  "/dashboard/quotes",
-  requireAuth,
-  async (req: AuthenticatedRequest, res: Response) => {
-    if (!req.user) {
-      return res.status(401).json({ error: "unauthorized" });
-    }
+      return reply.send({ items, nextCursor });
+    },
+  );
 
-    const parsed = createQuoteSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return res.status(400).json({ error: "invalid_body" });
-    }
+  fastify.get(
+    "/dashboard/quotes",
+    { preHandler: [requireAuth] },
+    async (request, reply) => {
+      if (!request.user) {
+        return reply.code(401).send({ error: "unauthorized" });
+      }
 
-    const [created] = await db
-      .insert(quotes)
-      .values({
-        text: parsed.data.text,
-        author: parsed.data.author,
-        createdBy: req.user.id,
-      })
-      .returning();
+      const rows = await dbRead
+        .select()
+        .from(quotes)
+        .where(eq(quotes.createdBy, request.user.id));
 
-    return res.status(201).json(created);
-  },
-);
+      return reply.send({ items: rows });
+    },
+  );
 
-router.put(
-  "/dashboard/quotes/:id",
-  requireAuth,
-  async (req: AuthenticatedRequest, res: Response) => {
-    if (!req.user) {
-      return res.status(401).json({ error: "unauthorized" });
-    }
+  fastify.post(
+    "/dashboard/quotes",
+    { preHandler: [requireAuth] },
+    async (request, reply) => {
+      if (!request.user) {
+        return reply.code(401).send({ error: "unauthorized" });
+      }
 
-    const rawId = req.params.id;
-    const id = typeof rawId === "string" ? rawId : rawId?.[0];
-    if (!id) {
-      return res.status(400).json({ error: "invalid_id" });
-    }
-    const parsed = updateQuoteSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return res.status(400).json({ error: "invalid_body" });
-    }
+      const parsed = createQuoteSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.code(400).send({ error: "invalid_body" });
+      }
 
-    const [updated] = await db
-      .update(quotes)
-      .set(parsed.data)
-      .where(and(eq(quotes.id, id), eq(quotes.createdBy, req.user.id)))
-      .returning();
+      const [created] = await db
+        .insert(quotes)
+        .values({
+          text: parsed.data.text,
+          author: parsed.data.author,
+          createdBy: request.user.id,
+        })
+        .returning();
 
-    if (!updated) {
-      return res.status(404).json({ error: "not_found" });
-    }
+      return reply.code(201).send(created);
+    },
+  );
 
-    return res.json(updated);
-  },
-);
+  fastify.put(
+    "/dashboard/quotes/:id",
+    { preHandler: [requireAuth] },
+    async (request, reply) => {
+      if (!request.user) {
+        return reply.code(401).send({ error: "unauthorized" });
+      }
 
-router.delete(
-  "/dashboard/quotes/:id",
-  requireAuth,
-  async (req: AuthenticatedRequest, res: Response) => {
-    if (!req.user) {
-      return res.status(401).json({ error: "unauthorized" });
-    }
+      const rawId = (request.params as { id?: string }).id;
+      const id = typeof rawId === "string" ? rawId : rawId?.[0];
+      if (!id) {
+        return reply.code(400).send({ error: "invalid_id" });
+      }
+      const parsed = updateQuoteSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.code(400).send({ error: "invalid_body" });
+      }
 
-    const rawId = req.params.id;
-    const id = typeof rawId === "string" ? rawId : rawId?.[0];
-    if (!id) {
-      return res.status(400).json({ error: "invalid_id" });
-    }
+      const [updated] = await db
+        .update(quotes)
+        .set(parsed.data)
+        .where(
+          and(
+            eq(quotes.id, id),
+            eq(quotes.createdBy, request.user.id),
+          ),
+        )
+        .returning();
 
-    const [deleted] = await db
-      .delete(quotes)
-      .where(and(eq(quotes.id, id), eq(quotes.createdBy, req.user.id)))
-      .returning();
+      if (!updated) {
+        return reply.code(404).send({ error: "not_found" });
+      }
 
-    if (!deleted) {
-      return res.status(404).json({ error: "not_found" });
-    }
+      return reply.send(updated);
+    },
+  );
 
-    return res.status(204).send();
-  },
-);
+  fastify.delete(
+    "/dashboard/quotes/:id",
+    { preHandler: [requireAuth] },
+    async (request, reply) => {
+      if (!request.user) {
+        return reply.code(401).send({ error: "unauthorized" });
+      }
 
-export const quotesRouter = router;
+      const rawId = (request.params as { id?: string }).id;
+      const id = typeof rawId === "string" ? rawId : rawId?.[0];
+      if (!id) {
+        return reply.code(400).send({ error: "invalid_id" });
+      }
 
+      const [deleted] = await db
+        .delete(quotes)
+        .where(
+          and(
+            eq(quotes.id, id),
+            eq(quotes.createdBy, request.user.id),
+          ),
+        )
+        .returning();
+
+      if (!deleted) {
+        return reply.code(404).send({ error: "not_found" });
+      }
+
+      return reply.code(204).send();
+    },
+  );
+}

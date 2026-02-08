@@ -1,8 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import type { Response, NextFunction } from "express";
-import type { AuthenticatedRequest } from "./auth";
+import type { FastifyRequest, FastifyReply } from "fastify";
 
-// Mock the dependencies before importing
 vi.mock("../config/env", () => ({
   loadEnv: () => ({
     PORT: 3001,
@@ -23,17 +21,15 @@ vi.mock("../redis/client", () => ({
 const { requireAdmin } = await import("./auth");
 
 describe("RBAC middleware", () => {
-  let mockRequest: Partial<AuthenticatedRequest>;
-  let mockResponse: Partial<Response>;
-  let nextFunction: NextFunction;
+  let mockRequest: Partial<FastifyRequest>;
+  let mockReply: Partial<FastifyReply>;
 
   beforeEach(() => {
     mockRequest = {};
-    mockResponse = {
-      status: vi.fn().mockReturnThis(),
-      json: vi.fn().mockReturnThis(),
+    mockReply = {
+      code: vi.fn().mockReturnThis(),
+      send: vi.fn().mockReturnThis(),
     };
-    nextFunction = vi.fn();
   });
 
   describe("requireAdmin", () => {
@@ -41,16 +37,14 @@ describe("RBAC middleware", () => {
       mockRequest.user = undefined;
 
       await requireAdmin(
-        mockRequest as AuthenticatedRequest,
-        mockResponse as Response,
-        nextFunction,
+        mockRequest as FastifyRequest,
+        mockReply as FastifyReply,
       );
 
-      expect(mockResponse.status).toHaveBeenCalledWith(401);
-      expect(mockResponse.json).toHaveBeenCalledWith({
+      expect(mockReply.code).toHaveBeenCalledWith(401);
+      expect(mockReply.send).toHaveBeenCalledWith({
         error: "unauthorized",
       });
-      expect(nextFunction).not.toHaveBeenCalled();
     });
 
     it("should return 403 if user is not an admin", async () => {
@@ -61,17 +55,15 @@ describe("RBAC middleware", () => {
       };
 
       await requireAdmin(
-        mockRequest as AuthenticatedRequest,
-        mockResponse as Response,
-        nextFunction,
+        mockRequest as FastifyRequest,
+        mockReply as FastifyReply,
       );
 
-      expect(mockResponse.status).toHaveBeenCalledWith(403);
-      expect(mockResponse.json).toHaveBeenCalledWith({ error: "forbidden" });
-      expect(nextFunction).not.toHaveBeenCalled();
+      expect(mockReply.code).toHaveBeenCalledWith(403);
+      expect(mockReply.send).toHaveBeenCalledWith({ error: "forbidden" });
     });
 
-    it("should call next if user is an admin", async () => {
+    it("should not send response if user is an admin", async () => {
       mockRequest.user = {
         id: "admin-id",
         email: "admin@example.com",
@@ -79,14 +71,12 @@ describe("RBAC middleware", () => {
       };
 
       await requireAdmin(
-        mockRequest as AuthenticatedRequest,
-        mockResponse as Response,
-        nextFunction,
+        mockRequest as FastifyRequest,
+        mockReply as FastifyReply,
       );
 
-      expect(mockResponse.status).not.toHaveBeenCalled();
-      expect(mockResponse.json).not.toHaveBeenCalled();
-      expect(nextFunction).toHaveBeenCalled();
+      expect(mockReply.code).not.toHaveBeenCalled();
+      expect(mockReply.send).not.toHaveBeenCalled();
     });
 
     it("should handle different role values correctly", async () => {
@@ -100,13 +90,12 @@ describe("RBAC middleware", () => {
         };
 
         await requireAdmin(
-          mockRequest as AuthenticatedRequest,
-          mockResponse as Response,
-          nextFunction,
+          mockRequest as FastifyRequest,
+          mockReply as FastifyReply,
         );
 
-        expect(mockResponse.status).toHaveBeenCalledWith(403);
-        expect(mockResponse.json).toHaveBeenCalledWith({
+        expect(mockReply.code).toHaveBeenCalledWith(403);
+        expect(mockReply.send).toHaveBeenCalledWith({
           error: "forbidden",
         });
       }
@@ -118,17 +107,15 @@ describe("RBAC middleware", () => {
       mockRequest.user = {
         id: "user-id",
         email: "user@example.com",
-        role: "Admin", // Different case
+        role: "Admin",
       };
 
       await requireAdmin(
-        mockRequest as AuthenticatedRequest,
-        mockResponse as Response,
-        nextFunction,
+        mockRequest as FastifyRequest,
+        mockReply as FastifyReply,
       );
 
-      expect(mockResponse.status).toHaveBeenCalledWith(403);
-      expect(nextFunction).not.toHaveBeenCalled();
+      expect(mockReply.code).toHaveBeenCalledWith(403);
     });
 
     it("should not allow empty role", async () => {
@@ -139,13 +126,11 @@ describe("RBAC middleware", () => {
       };
 
       await requireAdmin(
-        mockRequest as AuthenticatedRequest,
-        mockResponse as Response,
-        nextFunction,
+        mockRequest as FastifyRequest,
+        mockReply as FastifyReply,
       );
 
-      expect(mockResponse.status).toHaveBeenCalledWith(403);
-      expect(nextFunction).not.toHaveBeenCalled();
+      expect(mockReply.code).toHaveBeenCalledWith(403);
     });
   });
 });

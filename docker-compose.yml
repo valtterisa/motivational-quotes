@@ -9,8 +9,36 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-quotes}
     volumes:
       - db-data:/var/lib/postgresql/data
+      - ./docker/db-init/01-allow-replication.sh:/docker-entrypoint-initdb.d/01-allow-replication.sh
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\""]
+      test: ["CMD-SHELL", 'pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  postgres-replica:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-app}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-quotes}
+    volumes:
+      - replica-data:/var/lib/postgresql/data
+    command: >
+      bash -c "
+      if [ ! -f /var/lib/postgresql/data/standby.signal ]; then
+        until pg_isready -h db -p 5432 -U $$POSTGRES_USER; do sleep 2; done;
+        rm -rf /var/lib/postgresql/data/* 2>/dev/null;
+        PGPASSWORD=$$POSTGRES_PASSWORD pg_basebackup -h db -p 5432 -U $$POSTGRES_USER -D /var/lib/postgresql/data -R -X stream -v;
+        chown -R postgres:postgres /var/lib/postgresql/data;
+      fi;
+      exec docker-entrypoint.sh postgres
+      "
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", 'pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"']
       interval: 10s
       timeout: 5s
       retries: 5
@@ -30,18 +58,27 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      postgres-replica:
+        condition: service_healthy
       redis:
         condition: service_healthy
     environment:
       PORT: ${BACKEND_PORT:-3001}
       DATABASE_URL: postgres://${POSTGRES_USER:-app}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-quotes}
+      DATABASE_READ_URL: postgres://${POSTGRES_USER:-app}:${POSTGRES_PASSWORD}@postgres-replica:5432/${POSTGRES_DB:-quotes}
       REDIS_URL: redis://redis:6379
       JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://localhost:3000}
     ports:
       - "${BACKEND_PORT:-3001}:${BACKEND_PORT:-3001}"
     healthcheck:
-      test: ["CMD", "node", "-e", "require('http').get('http://localhost:${BACKEND_PORT:-3001}/health', (r) => { r.resume(); process.exit(r.statusCode === 200 ? 0 : 1); }).on('error', () => process.exit(1))"]
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "require('http').get('http://localhost:${BACKEND_PORT:-3001}/health', (r) => { r.resume(); process.exit(r.statusCode === 200 ? 0 : 1); }).on('error', () => process.exit(1))",
+        ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -57,3 +94,4 @@ services:
 
 volumes:
   db-data:
+  replica-data:

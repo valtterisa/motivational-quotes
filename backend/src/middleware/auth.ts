@@ -1,4 +1,4 @@
-import type { NextFunction, Request, Response } from "express";
+import type { FastifyRequest, FastifyReply } from "fastify";
 import jwt from "jsonwebtoken";
 import { loadEnv } from "../config/env";
 import { redisClient } from "../redis/client";
@@ -9,10 +9,6 @@ export interface AuthUser {
   id: string;
   email: string;
   role: string;
-}
-
-export interface AuthenticatedRequest extends Request {
-  user?: AuthUser;
 }
 
 interface TokenPayload extends AuthUser {
@@ -40,51 +36,43 @@ export const isTokenBlacklisted = async (jti: string): Promise<boolean> => {
 };
 
 export const requireAuth = async (
-  req: AuthenticatedRequest,
-  res: Response,
-  next: NextFunction,
+  request: FastifyRequest,
+  reply: FastifyReply,
 ) => {
-  // Try to get token from cookie first, then fall back to Authorization header
-  let token = req.cookies?.access_token;
-  
+  const cookies = request.cookies ?? {};
+  let token = (cookies as { access_token?: string }).access_token;
   if (!token) {
-    const header = req.header("authorization");
+    const header = request.headers.authorization;
     if (header?.startsWith("Bearer ")) {
       token = header.slice("Bearer ".length);
     }
   }
 
   if (!token) {
-    return res.status(401).json({ error: "missing_token" });
+    return reply.code(401).send({ error: "missing_token" });
   }
 
   try {
     const decoded = jwt.verify(token, env.JWT_SECRET) as TokenPayload;
 
     if (decoded.jti && (await isTokenBlacklisted(decoded.jti))) {
-      return res.status(401).json({ error: "token_revoked" });
+      return reply.code(401).send({ error: "token_revoked" });
     }
 
-    req.user = { id: decoded.id, email: decoded.email, role: decoded.role };
-    return next();
+    request.user = { id: decoded.id, email: decoded.email, role: decoded.role };
   } catch {
-    return res.status(401).json({ error: "invalid_token" });
+    return reply.code(401).send({ error: "invalid_token" });
   }
 };
 
 export const requireAdmin = async (
-  req: AuthenticatedRequest,
-  res: Response,
-  next: NextFunction,
+  request: FastifyRequest,
+  reply: FastifyReply,
 ) => {
-  if (!req.user) {
-    return res.status(401).json({ error: "unauthorized" });
+  if (!request.user) {
+    return reply.code(401).send({ error: "unauthorized" });
   }
-
-  if (req.user.role !== "admin") {
-    return res.status(403).json({ error: "forbidden" });
+  if (request.user.role !== "admin") {
+    return reply.code(403).send({ error: "forbidden" });
   }
-
-  return next();
 };
-

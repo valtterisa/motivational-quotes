@@ -1,26 +1,18 @@
 import { useState, useEffect, type ReactNode } from "react";
 import { AuthContext, type User } from "./auth-context";
+import { apiCall, setStoredToken } from "@/lib/api";
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Fetch current user on mount
   useEffect(() => {
     const fetchUser = async () => {
       try {
-        const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:3001";
-        const res = await fetch(`${API_BASE}/auth/me`, {
-          credentials: "include",
-        });
-        
-        if (res.ok) {
-          const data = await res.json();
-          setUser(data.user);
-        }
-      } catch (error) {
-        // User not authenticated, that's okay
-        console.debug("Not authenticated", error);
+        const data = await apiCall<{ user: User }>("/auth/me");
+        setUser(data.user);
+      } catch {
+        setUser(null);
       } finally {
         setIsLoading(false);
       }
@@ -34,6 +26,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const clearAuth = () => {
+    setStoredToken(null);
     setUser(null);
   };
 

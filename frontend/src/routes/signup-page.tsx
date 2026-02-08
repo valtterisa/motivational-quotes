@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/state/use-auth";
-import { apiCall } from "@/lib/api";
+import { apiCall, setStoredToken } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -24,11 +24,12 @@ export const SignupPage = () => {
 
   const signup = useMutation({
     mutationFn: (body: { email: string; password: string }) =>
-      apiCall<{ user: { id: string; email: string } }>(
+      apiCall<{ user: { id: string; email: string }; token?: string }>(
         "/auth/signup",
         { method: "POST", body: JSON.stringify(body) },
       ),
     onSuccess: (data) => {
+      if (data.token) setStoredToken(data.token);
       setAuth(data.user);
       navigate("/dashboard");
     },

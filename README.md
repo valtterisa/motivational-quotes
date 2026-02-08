@@ -1,32 +1,33 @@
 # Motivational Quotes API
 
-A production-ready API for accessing motivational quotes with user authentication, API key management, rate limiting, and caching.
+A production-ready API for motivational quotes with user authentication, API key management, rate limiting, and caching. Built for high throughput with Fastify, optional read replica, and Redis caching.
 
 ## Features
 
-- **User Authentication**: Email/password signup and login with JWT tokens
-- **RBAC (Role-Based Access Control)**: Admin and user roles with permission-based access
-- **API Key Management**: Generate and manage API keys from the dashboard
+- **User Authentication**: Email/password signup and login with JWT tokens (HTTP-only cookie or Bearer header)
+- **RBAC**: Admin and user roles with permission-based access
+- **API Key Management**: Generate and revoke API keys from the dashboard
 - **Quotes CRUD**: Create, read, update, and delete quotes
+- **Infinite Feed**: `GET /feed` with cursor-based pagination (read replica for scale)
 - **Public API**: Access quotes via API keys with rate limiting
 - **Rate Limiting**: Redis-backed rate limiting per IP and API key
-- **Caching**: Redis caching for improved performance
-- **Cursor-based Pagination**: Efficient pagination for large datasets
-- **CORS Security**: Configurable whitelist for allowed origins
-- **Docker Support**: Full containerization with docker-compose
-- **TypeScript**: Fully typed backend and frontend
-- **CI/CD**: GitHub Actions for automated testing and builds
+- **Caching**: Redis cache for random quote (60s TTL)
+- **Cursor-based Pagination**: Efficient pagination for list and feed
+- **CORS**: Configurable allowed origins
+- **Docker**: Full stack with docker-compose (PostgreSQL primary + read replica, Redis, backend, frontend)
+- **TypeScript**: Typed backend and frontend
+- **CI**: GitHub Actions for tests and builds
 
 ## Tech Stack
 
 ### Backend
-- Express.js
+- Fastify
 - TypeScript
 - Drizzle ORM
-- PostgreSQL
-- Redis
+- PostgreSQL (primary + optional read replica)
+- Redis (rate limit, JWT blacklist, random-quote cache)
 - JWT authentication
-- Helmet for security
+- @fastify/helmet for security
 
 ### Frontend
 - React
@@ -40,16 +41,15 @@ A production-ready API for accessing motivational quotes with user authenticatio
 
 - Node.js 20+
 - pnpm 10.17.1+
-- Docker and Docker Compose (for containerized setup)
-- PostgreSQL (if running locally without Docker)
-- Redis (if running locally without Docker)
+- Docker and Docker Compose (for full stack)
+- PostgreSQL and Redis (if running backend locally without Docker)
 
 ### Local Development
 
 1. Clone the repository:
 ```bash
 git clone <repo-url>
-cd cat-pic-app
+cd motivational-quotes
 ```
 
 2. Install dependencies:
@@ -59,18 +59,22 @@ pnpm install
 
 3. Set up environment variables:
 
-Create `.env` files in `backend/` and `frontend/`:
+Create `.env` from the root (see `.env.example`). For local backend/frontend without Docker:
 
-**backend/.env**:
+**Backend** (e.g. `backend/.env` or root `.env` used by backend):
 ```
 PORT=3001
-DATABASE_URL=postgres://app:app@localhost:5432/quotes
+DATABASE_URL=postgres://app:yourpassword@localhost:5432/quotes
 REDIS_URL=redis://localhost:6379
 JWT_SECRET=your-secret-key-change-in-production
 CORS_ORIGINS=http://localhost:5173,http://localhost:3000
 ```
 
-**frontend/.env**:
+Optional:
+- `DATABASE_READ_URL`: Read replica URL (if unset, feed and read paths use primary)
+- `DB_POOL_MAX`: Connection pool size (default 10)
+
+**Frontend**:
 ```
 VITE_API_BASE_URL=http://localhost:3001
 ```
@@ -80,17 +84,9 @@ VITE_API_BASE_URL=http://localhost:3001
 docker compose up -d
 ```
 
-5. Run database migrations (for existing databases):
-```bash
-# If updating an existing database, run the migration
-psql $DATABASE_URL -f backend/migrations/001_add_role_to_users.sql
+This starts PostgreSQL (primary + read replica), Redis, backend, and frontend. Migrations run on backend startup. For a fresh DB, the replica is bootstrapped from the primary via streaming replication.
 
-# For new databases, the schema will be created automatically on first run
-# Or you can create it manually:
-psql $DATABASE_URL -f backend/migrations/001_add_role_to_users.sql
-```
-
-6. Start development servers:
+5. Or run backend and frontend locally:
 
 Terminal 1 (backend):
 ```bash
@@ -104,269 +100,217 @@ cd frontend
 pnpm dev
 ```
 
-The app will be available at:
 - Frontend: http://localhost:5173
 - Backend API: http://localhost:3001
 
 ## Docker Deployment
 
-### Build and Run
-
-1. Copy env template and set **required** variables (no default passwords in compose):
-
+1. Copy env template and set required variables:
 ```bash
 cp .env.example .env
-# Edit .env: set POSTGRES_PASSWORD and JWT_SECRET (use strong values in production)
+# Set POSTGRES_PASSWORD and JWT_SECRET (use strong values in production)
 ```
 
 2. Start the stack:
-
 ```bash
 docker compose up --build
 ```
 
-This will start:
-- PostgreSQL (no host port by default; backend connects via internal network)
-- Redis on host port 6380 (or `REDIS_PORT` from .env)
-- Backend API on port 3001 (or `BACKEND_PORT`)
-- Frontend on port 3000 (or `FRONTEND_PORT`)
+Services:
+- **db**: PostgreSQL primary
+- **postgres-replica**: Read-only replica (streaming replication) for feed and read-heavy paths
+- **redis**: Redis
+- **backend**: Fastify API (port 3001 or `BACKEND_PORT`)
+- **frontend**: Static app (port 3000 or `FRONTEND_PORT`)
 
-All compose env vars are documented in `.env.example`. Required: `POSTGRES_PASSWORD`, `JWT_SECRET`.
+Required in `.env`: `POSTGRES_PASSWORD`, `JWT_SECRET`. See `.env.example` for optional vars (`DATABASE_READ_URL`, `DB_POOL_MAX`, etc.).
 
-### Environment Variables (deployment / Railway etc.)
+### Verify replication
 
-**Backend**:
-- `PORT`: Server port (default: 3001)
-- `DATABASE_URL`: PostgreSQL connection string
-- `REDIS_URL`: Redis connection string
-- `JWT_SECRET`: Secret key for JWT signing
-- `CORS_ORIGINS`: Comma-separated list of allowed CORS origins (default: http://localhost:5173,http://localhost:3000)
+With the stack running (including `postgres-replica` and `DATABASE_READ_URL`), you can confirm data replicates from primary to replica:
 
-**Frontend**:
-- `VITE_API_BASE_URL`: Backend API URL
+**1. Using the app**
+
+- Sign up / log in, create a quote in the dashboard.
+- Call `GET /feed?limit=5` (or use the feed in the UI). The feed reads from the replica; the new quote should appear after a short delay (usually &lt; 1 s).
+
+**2. Using psql (primary vs replica)**
+
+From the project root (replace `yourpassword` and container names if different):
+
+```bash
+# Insert on primary (db)
+docker exec -it motivational-quotes-db-1 psql -U app -d quotes -c "INSERT INTO quotes (text, author) VALUES ('Replication test', 'You');"
+
+# Wait a second, then read from replica (read-only)
+docker exec -it motivational-quotes-postgres-replica-1 psql -U app -d quotes -c "SELECT id, text, author, created_at FROM quotes ORDER BY created_at DESC LIMIT 5;"
+```
+
+If the new row appears in the replica output, replication is working. Replica lag is usually sub-second.
+
+**3. Check replica lag (optional)**
+
+On the replica:
+
+```bash
+docker exec -it motivational-quotes-postgres-replica-1 psql -U app -d quotes -c "SELECT now() - pg_last_xact_replay_timestamp() AS replica_lag;"
+```
+
+`replica_lag` should be small (e.g. 00:00:00.xxx); NULL means no replay yet.
 
 ## API Documentation
 
+### Health
+```bash
+GET /health
+```
+Returns `{ "ok": true }`.
+
 ### Authentication
 
-#### Sign Up
+**Sign Up**
 ```bash
 POST /auth/signup
 Content-Type: application/json
 
-{
-  "email": "user@example.com",
-  "password": "password123"
-}
+{ "email": "user@example.com", "password": "password123" }
 ```
 
-#### Login
+**Login**
 ```bash
 POST /auth/login
 Content-Type: application/json
 
-{
-  "email": "user@example.com",
-  "password": "password123"
-}
+{ "email": "user@example.com", "password": "password123" }
+```
+Cookie `access_token` is set (or use `Authorization: Bearer <token>`).
+
+**Me**
+```bash
+GET /auth/me
+Authorization: Bearer <token>   # or cookie
 ```
 
-### Public API (Requires API Key)
+**Logout**
+```bash
+POST /auth/logout
+Authorization: Bearer <token>
+```
 
-All public endpoints require the `x-api-key` header.
+### Feed (no auth, uses read replica when configured)
+```bash
+GET /feed?limit=20&cursor=<uuid>
+```
+Response: `{ "items": [...], "nextCursor": "uuid-or-null" }`
 
-#### Get Random Quote
+### Public API (requires API key)
+
+Send `x-api-key` header.
+
+**Random quote** (cached in Redis 60s):
 ```bash
 GET /api/v1/quotes/random
-x-api-key: your-api-key-here
+x-api-key: your-api-key
 ```
 
-#### List Quotes (with pagination)
+**List quotes** (cursor pagination):
 ```bash
 GET /api/v1/quotes?limit=20&cursor=<uuid>
-x-api-key: your-api-key-here
+x-api-key: your-api-key
 ```
+Response: `{ "items": [...], "nextCursor": "uuid-or-null" }`
 
-Response:
-```json
-{
-  "items": [...],
-  "nextCursor": "uuid-or-null"
-}
-```
+### Dashboard (requires JWT)
 
-### Dashboard API (Requires JWT)
+Use `Authorization: Bearer <token>` or cookie.
 
-All dashboard endpoints require the `Authorization: Bearer <token>` header.
-
-#### List Your Quotes
+**List your quotes**
 ```bash
 GET /dashboard/quotes
-Authorization: Bearer <jwt-token>
 ```
 
-#### Create Quote
+**Create quote**
 ```bash
 POST /dashboard/quotes
-Authorization: Bearer <jwt-token>
 Content-Type: application/json
-
-{
-  "text": "Your quote text",
-  "author": "Optional author"
-}
+{ "text": "Your quote", "author": "Optional" }
 ```
 
-#### Update Quote
+**Update quote**
 ```bash
 PUT /dashboard/quotes/:id
-Authorization: Bearer <jwt-token>
 Content-Type: application/json
-
-{
-  "text": "Updated text",
-  "author": "Updated author"
-}
+{ "text": "Updated", "author": "Optional" }
 ```
 
-#### Delete Quote
+**Delete quote**
 ```bash
 DELETE /dashboard/quotes/:id
-Authorization: Bearer <jwt-token>
 ```
 
-### API Key Management
-
-#### List API Keys
-```bash
-GET /dashboard/api-keys
-Authorization: Bearer <jwt-token>
-```
-
-#### Create API Key
-```bash
-POST /dashboard/api-keys
-Authorization: Bearer <jwt-token>
-Content-Type: application/json
-
-{
-  "label": "My API Key"
-}
-```
-
-Response includes the plaintext key (only shown once):
-```json
-{
-  "key": {...},
-  "token": "mot_<your-api-key>"
-}
-```
-
-#### Revoke API Key
-```bash
-POST /dashboard/api-keys/:id/revoke
-Authorization: Bearer <jwt-token>
-```
+### API Keys
+- `GET /dashboard/api-keys` – list keys
+- `POST /dashboard/api-keys` – create (body: `{ "label": "My Key" }`); response includes `token` once
+- `POST /dashboard/api-keys/:id/revoke` – revoke
 
 ## Rate Limiting
 
-- **Public API**: 100 requests per 15 minutes per API key or IP
-- **Auth endpoints**: 10 requests per 15 minutes per IP
+- **Public API** (`/api/v1/*`): 100 requests per 15 minutes per API key or IP
+- **Auth** (`/auth/*`): 10 requests per 15 minutes per IP
 
-Rate limit headers:
-- `X-RateLimit-Limit`: Maximum requests allowed
-- `X-RateLimit-Remaining`: Remaining requests in window
-
-When rate limit is exceeded, you'll receive a `429` response:
-```json
-{
-  "error": "rate_limit_exceeded",
-  "retryAfter": 900
-}
-```
+Headers: `X-RateLimit-Limit`, `X-RateLimit-Remaining`. On exceed: `429` with `{ "error": "rate_limit_exceeded", "retryAfter": <seconds> }`.
 
 ## Security
 
-- **RBAC**: Role-based access control with admin and user roles
-- **CORS**: Whitelist-based CORS configuration for allowed origins
-- Passwords are hashed using bcrypt (12 rounds)
-- API keys are hashed (SHA-256) before storage
-- JWT tokens can be blacklisted (stored in Redis)
-- Helmet.js for HTTP security headers
-- Rate limiting to prevent abuse
+- RBAC (admin/user)
+- CORS whitelist
+- bcrypt (12 rounds) for passwords
+- SHA-256 hashed API keys
+- JWT blacklist in Redis
+- @fastify/helmet
+- Rate limiting
 
 ## Testing
 
-### Backend
+**Backend**
 ```bash
-cd backend
-pnpm test
+cd backend && pnpm test
 ```
 
-### Frontend
+**Frontend**
 ```bash
-cd frontend
-pnpm test
+cd frontend && pnpm test
 ```
 
-## Railway Deployment
-
-### Setup
-
-1. Create two Railway projects: `dev` and `prod`
-2. Add PostgreSQL and Redis services to each project
-3. Set environment variables in Railway dashboard
-4. Connect GitHub repository
-5. Deploy from main branch
-
-### Environment Separation
-
-- **Dev**: Use for testing and development
-- **Prod**: Use for production traffic
-
-Each environment has:
-- Separate database
-- Separate Redis instance
-- Separate environment variables
-- Independent scaling
-
-### Monitoring
-
-Railway provides built-in metrics and logs:
-- View logs in Railway dashboard
-- Monitor request rates and errors
-- Track resource usage
-
-## Development
-
-### Project Structure
+## Project Structure
 
 ```
-cat-pic-app/
+motivational-quotes/
 ├── backend/
 │   ├── src/
-│   │   ├── app.ts              # Express app setup
-│   │   ├── server.ts           # Server entry point
-│   │   ├── config/             # Configuration
-│   │   ├── db/                 # Database (Drizzle)
-│   │   ├── redis/               # Redis client
-│   │   ├── middleware/         # Express middleware
-│   │   └── modules/             # Feature modules
+│   │   ├── app.ts              # Fastify app and plugins
+│   │   ├── server.ts           # Entry, migrations, listen
+│   │   ├── config/             # Env
+│   │   ├── db/                 # Drizzle, schema, migrate
+│   │   ├── redis/              # Redis client
+│   │   ├── middleware/         # Auth, API key, rate-limit, error (hooks)
+│   │   ├── modules/            # Auth, api-keys, quotes (routes)
+│   │   └── types/              # Fastify request augmentation
+│   ├── migrations/             # SQL migrations
 │   └── Dockerfile
 ├── frontend/
 │   ├── src/
-│   │   ├── routes/             # React routes
-│   │   ├── components/         # React components
-│   │   ├── lib/                # Utilities
-│   │   └── state/              # State management
+│   │   ├── routes/
+│   │   ├── components/
+│   │   ├── lib/
+│   │   └── state/
 │   └── Dockerfile
-└── docker-compose.yml
+├── docker/
+│   └── db-init/                # Postgres init (e.g. replication)
+├── docker-compose.yml
+└── .env.example
 ```
 
 ## License
 
 ISC
-
-## Support
-
-For issues and questions, please open an issue on GitHub.

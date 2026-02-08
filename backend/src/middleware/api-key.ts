@@ -1,28 +1,19 @@
-import type { NextFunction, Request, Response } from "express";
+import type { FastifyRequest, FastifyReply } from "fastify";
 import crypto from "node:crypto";
 import { db } from "../db/drizzle";
 import { apiKeys, users } from "../db/schema";
 import { eq, and, isNull } from "drizzle-orm";
 
-export interface ApiUserRequest extends Request {
-  apiUser?: {
-    id: string;
-    email: string;
-  };
-  apiKeyId?: string;
-}
-
 const hashKey = (key: string) =>
   crypto.createHash("sha256").update(key).digest("hex");
 
 export const requireApiKey = async (
-  req: ApiUserRequest,
-  res: Response,
-  next: NextFunction,
+  request: FastifyRequest,
+  reply: FastifyReply,
 ) => {
-  const rawKey = req.header("x-api-key");
-  if (!rawKey) {
-    return res.status(401).json({ error: "missing_api_key" });
+  const rawKey = request.headers["x-api-key"];
+  if (!rawKey || typeof rawKey !== "string") {
+    return reply.code(401).send({ error: "missing_api_key" });
   }
 
   const keyHash = hashKey(rawKey);
@@ -40,17 +31,14 @@ export const requireApiKey = async (
 
   const match = row[0];
   if (!match) {
-    return res.status(401).json({ error: "invalid_api_key" });
+    return reply.code(401).send({ error: "invalid_api_key" });
   }
 
-  req.apiUser = { id: match.userId, email: match.email };
-  req.apiKeyId = match.apiKeyId;
-
-  return next();
+  request.apiUser = { id: match.userId, email: match.email };
+  request.apiKeyId = match.apiKeyId;
 };
 
 export const generateApiKey = () => {
   const raw = `mot_${crypto.randomBytes(24).toString("hex")}`;
   return { raw, hash: hashKey(raw) };
 };
-

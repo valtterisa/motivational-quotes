@@ -1,115 +1,129 @@
-import type { Request, Response } from "express";
-import { Router } from "express";
+import type { FastifyInstance, FastifyPluginOptions } from "fastify";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { db } from "../../db/drizzle";
 import { users } from "../../db/schema";
-import { signAccessToken, requireAuth, type AuthenticatedRequest } from "../../middleware/auth";
+import { signAccessToken, requireAuth } from "../../middleware/auth";
 import { eq } from "drizzle-orm";
-
-const router = Router();
 
 const authSchema = z.object({
   email: z.string().email(),
   password: z.string().min(8),
 });
 
-const COOKIE_MAX_AGE = 60 * 60 * 1000; // 1 hour
+const COOKIE_MAX_AGE = 60 * 60;
 
 const COOKIE_OPTIONS = {
   httpOnly: true,
   secure: process.env.NODE_ENV === "production",
-  sameSite: "strict" as const, // Strict mode provides better CSRF protection
+  sameSite: "lax" as const,
+  path: "/",
   maxAge: COOKIE_MAX_AGE,
 };
 
-router.post("/signup", async (req: Request, res: Response) => {
-  const result = authSchema.safeParse(req.body);
-  if (!result.success) {
-    return res.status(400).json({ error: "invalid_body" });
-  }
+export async function authRoutes(
+  fastify: FastifyInstance,
+  _opts: FastifyPluginOptions,
+) {
+  fastify.post("/signup", async (request, reply) => {
+    const result = authSchema.safeParse(request.body);
+    if (!result.success) {
+      return reply.code(400).send({ error: "invalid_body" });
+    }
 
-  const { email, password } = result.data;
+    const { email, password } = result.data;
 
-  const [existing] = await db
-    .select()
-    .from(users)
-    .where(eq(users.email, email))
-    .limit(1);
-  if (existing) {
-    return res.status(409).json({ error: "email_in_use" });
-  }
+    const [existing] = await db
+      .select()
+      .from(users)
+      .where(eq(users.email, email))
+      .limit(1);
+    if (existing) {
+      return reply.code(409).send({ error: "email_in_use" });
+    }
 
-  const passwordHash = await bcrypt.hash(password, 12);
+    const passwordHash = await bcrypt.hash(password, 12);
 
-  const [created] = await db
-    .insert(users)
-    .values({ email, passwordHash })
-    .returning();
+    const [created] = await db
+      .insert(users)
+      .values({ email, passwordHash })
+      .returning();
 
-  const token = signAccessToken({ id: created.id, email: created.email, role: created.role });
+    const token = signAccessToken({
+      id: created.id,
+      email: created.email,
+      role: created.role,
+    });
 
-  // Set HTTP-only cookie
-  res.cookie("access_token", token, COOKIE_OPTIONS);
+    reply.setCookie("access_token", token, COOKIE_OPTIONS);
 
-  return res.status(201).json({
-    user: { id: created.id, email: created.email, role: created.role },
-  });
-});
-
-router.post("/login", async (req: Request, res: Response) => {
-  const result = authSchema.safeParse(req.body);
-  if (!result.success) {
-    return res.status(400).json({ error: "invalid_body" });
-  }
-
-  const { email, password } = result.data;
-
-  const [user] = await db
-    .select()
-    .from(users)
-    .where(eq(users.email, email))
-    .limit(1);
-
-  if (!user) {
-    return res.status(401).json({ error: "invalid_credentials" });
-  }
-
-  const ok = await bcrypt.compare(password, user.passwordHash);
-  if (!ok) {
-    return res.status(401).json({ error: "invalid_credentials" });
-  }
-
-  const token = signAccessToken({ id: user.id, email: user.email, role: user.role });
-
-  // Set HTTP-only cookie
-  res.cookie("access_token", token, COOKIE_OPTIONS);
-
-  return res.json({
-    user: { id: user.id, email: user.email, role: user.role },
-  });
-});
-
-router.get("/me", requireAuth, async (req: AuthenticatedRequest, res: Response) => {
-  if (!req.user) {
-    return res.status(401).json({ error: "unauthorized" });
-  }
-
-  return res.json({
-    user: { id: req.user.id, email: req.user.email, role: req.user.role },
-  });
-});
-
-router.post("/logout", requireAuth, async (req: AuthenticatedRequest, res: Response) => {
-  // Clear the cookie
-  res.clearCookie("access_token", {
-    httpOnly: COOKIE_OPTIONS.httpOnly,
-    secure: COOKIE_OPTIONS.secure,
-    sameSite: COOKIE_OPTIONS.sameSite,
+    return reply.code(201).send({
+      user: { id: created.id, email: created.email, role: created.role },
+      token,
+    });
   });
 
-  return res.json({ success: true });
-});
+  fastify.post("/login", async (request, reply) => {
+    const result = authSchema.safeParse(request.body);
+    if (!result.success) {
+      return reply.code(400).send({ error: "invalid_body" });
+    }
 
-export const authRouter = router;
+    const { email, password } = result.data;
 
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(eq(users.email, email))
+      .limit(1);
+
+    if (!user) {
+      return reply.code(401).send({ error: "invalid_credentials" });
+    }
+
+    const ok = await bcrypt.compare(password, user.passwordHash);
+    if (!ok) {
+      return reply.code(401).send({ error: "invalid_credentials" });
+    }
+
+    const token = signAccessToken({
+      id: user.id,
+      email: user.email,
+      role: user.role,
+    });
+
+    reply.setCookie("access_token", token, COOKIE_OPTIONS);
+
+    return reply.send({
+      user: { id: user.id, email: user.email, role: user.role },
+      token,
+    });
+  });
+
+  fastify.get("/me", { preHandler: [requireAuth] }, async (request, reply) => {
+    if (!request.user) {
+      return reply.code(401).send({ error: "unauthorized" });
+    }
+    return reply.send({
+      user: {
+        id: request.user.id,
+        email: request.user.email,
+        role: request.user.role,
+      },
+    });
+  });
+
+  fastify.post(
+    "/logout",
+    { preHandler: [requireAuth] },
+    async (request, reply) => {
+      reply.clearCookie("access_token", {
+        path: COOKIE_OPTIONS.path,
+        httpOnly: COOKIE_OPTIONS.httpOnly,
+        secure: COOKIE_OPTIONS.secure,
+        sameSite: COOKIE_OPTIONS.sameSite,
+      });
+      return reply.send({ success: true });
+    },
+  );
+}

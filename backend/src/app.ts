@@ -1,39 +1,59 @@
-import express, { type Request, type Response } from "express";
-import cors from "cors";
-import helmet from "helmet";
-import cookieParser from "cookie-parser";
-import { authRouter } from "./modules/auth/routes";
-import { apiKeysRouter } from "./modules/api-keys/routes";
-import { quotesRouter } from "./modules/quotes/routes";
+import Fastify from "fastify";
+import helmet from "@fastify/helmet";
+import cors from "@fastify/cors";
+import cookie from "@fastify/cookie";
+import { authRoutes } from "./modules/auth/routes";
+import { apiKeysRoutes } from "./modules/api-keys/routes";
+import { quotesRoutes } from "./modules/quotes/routes";
 import { apiRateLimit, authRateLimit } from "./middleware/rate-limit";
 import { errorHandler } from "./middleware/error";
 import { loadEnv } from "./config/env";
 
 export const createApp = () => {
-  const app = express();
   const env = loadEnv();
-  app.set("trust proxy", 1);
-  app.use(helmet());
-  app.use(
-    cors({
-      origin: env.CORS_ORIGINS,
-      credentials: true,
-    }),
-  );
-  app.use(express.json());
-  app.use(cookieParser());
+  const app = Fastify({ logger: false, trustProxy: true });
 
-  app.get("/health", (_req: Request, res: Response) => {
-    res.json({ ok: true });
+  app.addContentTypeParser("application/json", { parseAs: "string" }, (req, body, done) => {
+    try {
+      const parsed = body && body.length > 0 ? JSON.parse(body as string) : {};
+      done(null, parsed);
+    } catch (err) {
+      done(err as Error, undefined);
+    }
   });
 
-  app.use("/auth", authRateLimit, authRouter);
-  app.use("/dashboard/api-keys", apiKeysRouter);
-  app.use("/api/v1", apiRateLimit, quotesRouter);
-  app.use(quotesRouter);
+  app.setErrorHandler(errorHandler);
 
-  app.use(errorHandler);
+  app.register(helmet);
+  app.register(cookie);
+  app.register(cors, {
+    origin: env.CORS_ORIGINS,
+    credentials: true,
+  });
+
+  app.get("/health", async (_request, reply) => {
+    return reply.send({ ok: true });
+  });
+
+  app.register(
+    async (instance) => {
+      instance.addHook("preHandler", authRateLimit);
+      instance.register(authRoutes);
+    },
+    { prefix: "/auth" },
+  );
+
+  app.register(apiKeysRoutes, { prefix: "/dashboard/api-keys" });
+
+  app.register(
+    async (instance) => {
+      instance.addHook("preHandler", apiRateLimit);
+      instance.register(quotesRoutes);
+    },
+    { prefix: "/api/v1" },
+  );
+
+  app.register(quotesRoutes);
 
   return app;
 };
-

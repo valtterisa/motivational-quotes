@@ -24,10 +24,9 @@ const startServer = async () => {
     console.error("Redis connection failed, continuing without cache:", err);
   }
 
-  app.listen(env.PORT, "0.0.0.0", () => {
-    // eslint-disable-next-line no-console
-    console.log(`backend listening on http://localhost:${env.PORT}`);
-  });
+  await app.listen({ port: env.PORT, host: "0.0.0.0" });
+  // eslint-disable-next-line no-console
+  console.log(`backend listening on http://localhost:${env.PORT}`);
 };
 
 startServer().catch((err) => {
@@ -35,5 +34,3 @@ startServer().catch((err) => {
   console.error("Failed to start server:", err);
   process.exit(1);
 });
-
-

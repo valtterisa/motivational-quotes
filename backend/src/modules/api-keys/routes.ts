@@ -1,32 +1,30 @@
-import type { Response } from "express";
-import { Router } from "express";
+import type { FastifyInstance, FastifyPluginOptions } from "fastify";
 import { z } from "zod";
 import { db } from "../../db/drizzle";
 import { apiKeys } from "../../db/schema";
-import { AuthenticatedRequest, requireAuth } from "../../middleware/auth";
+import { requireAuth } from "../../middleware/auth";
 import { generateApiKey } from "../../middleware/api-key";
 import { and, eq } from "drizzle-orm";
-
-const router = Router();
 
 const createSchema = z.object({
   label: z.string().min(1),
 });
 
-router.get(
-  "/",
-  requireAuth,
-  async (req: AuthenticatedRequest, res: Response) => {
-    if (!req.user) {
-      return res.status(401).json({ error: "unauthorized" });
+export async function apiKeysRoutes(
+  fastify: FastifyInstance,
+  _opts: FastifyPluginOptions,
+) {
+  fastify.get("/", { preHandler: [requireAuth] }, async (request, reply) => {
+    if (!request.user) {
+      return reply.code(401).send({ error: "unauthorized" });
     }
 
     const rows = await db
       .select()
       .from(apiKeys)
-      .where(eq(apiKeys.userId, req.user.id));
+      .where(eq(apiKeys.userId, request.user.id));
 
-    return res.json({
+    return reply.send({
       keys: rows.map((k) => ({
         id: k.id,
         label: k.label,
@@ -34,20 +32,16 @@ router.get(
         revokedAt: k.revokedAt,
       })),
     });
-  },
-);
+  });
 
-router.post(
-  "/",
-  requireAuth,
-  async (req: AuthenticatedRequest, res: Response) => {
-    if (!req.user) {
-      return res.status(401).json({ error: "unauthorized" });
+  fastify.post("/", { preHandler: [requireAuth] }, async (request, reply) => {
+    if (!request.user) {
+      return reply.code(401).send({ error: "unauthorized" });
     }
 
-    const result = createSchema.safeParse(req.body);
+    const result = createSchema.safeParse(request.body);
     if (!result.success) {
-      return res.status(400).json({ error: "invalid_body" });
+      return reply.code(400).send({ error: "invalid_body" });
     }
 
     const { label } = result.data;
@@ -56,13 +50,13 @@ router.post(
     const [created] = await db
       .insert(apiKeys)
       .values({
-        userId: req.user.id,
+        userId: request.user.id,
         keyHash: hash,
         label,
       })
       .returning();
 
-    return res.status(201).json({
+    return reply.code(201).send({
       key: {
         id: created.id,
         label: created.label,
@@ -70,31 +64,28 @@ router.post(
       },
       token: raw,
     });
-  },
-);
+  });
 
-router.post(
-  "/:id/revoke",
-  requireAuth,
-  async (req: AuthenticatedRequest, res: Response) => {
-    if (!req.user) {
-      return res.status(401).json({ error: "unauthorized" });
-    }
+  fastify.post(
+    "/:id/revoke",
+    { preHandler: [requireAuth] },
+    async (request, reply) => {
+      if (!request.user) {
+        return reply.code(401).send({ error: "unauthorized" });
+      }
 
-    const rawId = req.params.id;
-    const id = typeof rawId === "string" ? rawId : rawId?.[0];
-    if (!id) {
-      return res.status(400).json({ error: "invalid_id" });
-    }
+      const rawId = (request.params as { id?: string }).id;
+      const id = typeof rawId === "string" ? rawId : rawId?.[0];
+      if (!id) {
+        return reply.code(400).send({ error: "invalid_id" });
+      }
 
-    await db
-      .update(apiKeys)
-      .set({ revokedAt: new Date() })
-      .where(and(eq(apiKeys.id, id), eq(apiKeys.userId, req.user.id)));
+      await db
+        .update(apiKeys)
+        .set({ revokedAt: new Date() })
+        .where(and(eq(apiKeys.id, id), eq(apiKeys.userId, request.user.id)));
 
-    return res.json({ success: true });
-  },
-);
-
-export const apiKeysRouter = router;
-
+      return reply.send({ success: true });
+    },
+  );
+}
