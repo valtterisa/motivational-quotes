@@ -30,9 +30,28 @@ export async function quotesRoutes(
   fastify: FastifyInstance,
   _opts: FastifyPluginOptions,
 ) {
+  const quoteSchema = {
+    type: "object",
+    properties: {
+      id: { type: "string" },
+      text: { type: "string" },
+      author: { type: ["string", "null"] },
+      createdBy: { type: ["string", "null"] },
+      createdAt: { type: "string" },
+      updatedAt: { type: ["string", "null"] },
+    },
+  };
+
   fastify.get(
     "/quotes/random",
-    { preHandler: [requireApiKey] },
+    {
+      preHandler: [requireApiKey],
+      schema: {
+        tags: ["Quotes"],
+        description: "Requires X-API-Key header",
+        response: { 200: quoteSchema, 404: { type: "object", properties: { error: { type: "string" } } } },
+      },
+    },
     async (_request, reply) => {
       if (redisClient.isOpen) {
         try {
@@ -68,7 +87,25 @@ export async function quotesRoutes(
     },
   );
 
-  fastify.get("/feed", async (request, reply) => {
+  fastify.get("/feed", {
+    schema: {
+      tags: ["Quotes"],
+      querystring: {
+        type: "object",
+        properties: { cursor: { type: "string", format: "uuid" }, limit: { type: "integer", minimum: 1, maximum: 100 } },
+      },
+      response: {
+        200: {
+          type: "object",
+          properties: {
+            items: { type: "array", items: quoteSchema },
+            nextCursor: { type: ["string", "null"] },
+          },
+        },
+        400: { type: "object", properties: { error: { type: "string" } } },
+      },
+    },
+  }, async (request, reply) => {
     const parsed = listQuerySchema.safeParse(request.query);
     if (!parsed.success) {
       return reply.code(400).send({ error: "invalid_query" });
@@ -101,7 +138,27 @@ export async function quotesRoutes(
 
   fastify.get(
     "/quotes",
-    { preHandler: [requireApiKey] },
+    {
+      preHandler: [requireApiKey],
+      schema: {
+        tags: ["Quotes"],
+        description: "Requires X-API-Key header",
+        querystring: {
+          type: "object",
+          properties: { cursor: { type: "string", format: "uuid" }, limit: { type: "integer", minimum: 1, maximum: 100 } },
+        },
+        response: {
+          200: {
+            type: "object",
+            properties: {
+              items: { type: "array", items: quoteSchema },
+              nextCursor: { type: ["string", "null"] },
+            },
+          },
+          400: { type: "object", properties: { error: { type: "string" } } },
+        },
+      },
+    },
     async (request, reply) => {
       const parsed = listQuerySchema.safeParse(request.query);
       if (!parsed.success) {
@@ -136,7 +193,16 @@ export async function quotesRoutes(
 
   fastify.get(
     "/dashboard/quotes",
-    { preHandler: [requireAuth] },
+    {
+      preHandler: [requireAuth],
+      schema: {
+        tags: ["Quotes"],
+        response: {
+          200: { type: "object", properties: { items: { type: "array", items: quoteSchema } } },
+          401: { type: "object", properties: { error: { type: "string" } } },
+        },
+      },
+    },
     async (request, reply) => {
       if (!request.user) {
         return reply.code(401).send({ error: "unauthorized" });
@@ -153,7 +219,22 @@ export async function quotesRoutes(
 
   fastify.post(
     "/dashboard/quotes",
-    { preHandler: [requireAuth] },
+    {
+      preHandler: [requireAuth],
+      schema: {
+        tags: ["Quotes"],
+        body: {
+          type: "object",
+          required: ["text"],
+          properties: { text: { type: "string", minLength: 1 }, author: { type: "string" } },
+        },
+        response: {
+          201: quoteSchema,
+          400: { type: "object", properties: { error: { type: "string" } } },
+          401: { type: "object", properties: { error: { type: "string" } } },
+        },
+      },
+    },
     async (request, reply) => {
       if (!request.user) {
         return reply.code(401).send({ error: "unauthorized" });
@@ -179,7 +260,20 @@ export async function quotesRoutes(
 
   fastify.put(
     "/dashboard/quotes/:id",
-    { preHandler: [requireAuth] },
+    {
+      preHandler: [requireAuth],
+      schema: {
+        tags: ["Quotes"],
+        params: { type: "object", required: ["id"], properties: { id: { type: "string" } } },
+        body: { type: "object", properties: { text: { type: "string", minLength: 1 }, author: { type: "string" } } },
+        response: {
+          200: quoteSchema,
+          400: { type: "object", properties: { error: { type: "string" } } },
+          401: { type: "object", properties: { error: { type: "string" } } },
+          404: { type: "object", properties: { error: { type: "string" } } },
+        },
+      },
+    },
     async (request, reply) => {
       if (!request.user) {
         return reply.code(401).send({ error: "unauthorized" });
@@ -216,7 +310,19 @@ export async function quotesRoutes(
 
   fastify.delete(
     "/dashboard/quotes/:id",
-    { preHandler: [requireAuth] },
+    {
+      preHandler: [requireAuth],
+      schema: {
+        tags: ["Quotes"],
+        params: { type: "object", required: ["id"], properties: { id: { type: "string" } } },
+        response: {
+          204: { type: "null" },
+          400: { type: "object", properties: { error: { type: "string" } } },
+          401: { type: "object", properties: { error: { type: "string" } } },
+          404: { type: "object", properties: { error: { type: "string" } } },
+        },
+      },
+    },
     async (request, reply) => {
       if (!request.user) {
         return reply.code(401).send({ error: "unauthorized" });

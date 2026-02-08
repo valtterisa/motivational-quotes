@@ -25,7 +25,27 @@ export async function authRoutes(
   fastify: FastifyInstance,
   _opts: FastifyPluginOptions,
 ) {
-  fastify.post("/signup", async (request, reply) => {
+  fastify.post("/signup", {
+    schema: {
+      tags: ["Auth"],
+      body: {
+        type: "object",
+        required: ["email", "password"],
+        properties: { email: { type: "string", format: "email" }, password: { type: "string", minLength: 8 } },
+      },
+      response: {
+        201: {
+          type: "object",
+          properties: {
+            user: { type: "object", properties: { id: { type: "string" }, email: { type: "string" }, role: { type: "string" } } },
+            token: { type: "string" },
+          },
+        },
+        400: { type: "object", properties: { error: { type: "string" } } },
+        409: { type: "object", properties: { error: { type: "string" } } },
+      },
+    },
+  }, async (request, reply) => {
     const result = authSchema.safeParse(request.body);
     if (!result.success) {
       return reply.code(400).send({ error: "invalid_body" });
@@ -63,7 +83,27 @@ export async function authRoutes(
     });
   });
 
-  fastify.post("/login", async (request, reply) => {
+  fastify.post("/login", {
+    schema: {
+      tags: ["Auth"],
+      body: {
+        type: "object",
+        required: ["email", "password"],
+        properties: { email: { type: "string", format: "email" }, password: { type: "string", minLength: 8 } },
+      },
+      response: {
+        200: {
+          type: "object",
+          properties: {
+            user: { type: "object", properties: { id: { type: "string" }, email: { type: "string" }, role: { type: "string" } } },
+            token: { type: "string" },
+          },
+        },
+        400: { type: "object", properties: { error: { type: "string" } } },
+        401: { type: "object", properties: { error: { type: "string" } } },
+      },
+    },
+  }, async (request, reply) => {
     const result = authSchema.safeParse(request.body);
     if (!result.success) {
       return reply.code(400).send({ error: "invalid_body" });
@@ -100,7 +140,16 @@ export async function authRoutes(
     });
   });
 
-  fastify.get("/me", { preHandler: [requireAuth] }, async (request, reply) => {
+  fastify.get("/me", {
+    preHandler: [requireAuth],
+    schema: {
+      tags: ["Auth"],
+      response: {
+        200: { type: "object", properties: { user: { type: "object", properties: { id: { type: "string" }, email: { type: "string" }, role: { type: "string" } } } } },
+        401: { type: "object", properties: { error: { type: "string" } } },
+      },
+    },
+  }, async (request, reply) => {
     if (!request.user) {
       return reply.code(401).send({ error: "unauthorized" });
     }
@@ -115,7 +164,10 @@ export async function authRoutes(
 
   fastify.post(
     "/logout",
-    { preHandler: [requireAuth] },
+    {
+      preHandler: [requireAuth],
+      schema: { tags: ["Auth"], response: { 200: { type: "object", properties: { success: { type: "boolean" } } } } },
+    },
     async (request, reply) => {
       reply.clearCookie("access_token", {
         path: COOKIE_OPTIONS.path,

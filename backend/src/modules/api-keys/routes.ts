@@ -14,7 +14,24 @@ export async function apiKeysRoutes(
   fastify: FastifyInstance,
   _opts: FastifyPluginOptions,
 ) {
-  fastify.get("/", { preHandler: [requireAuth] }, async (request, reply) => {
+  fastify.get("/", {
+    preHandler: [requireAuth],
+    schema: {
+      tags: ["API Keys"],
+      response: {
+        200: {
+          type: "object",
+          properties: {
+            keys: {
+              type: "array",
+              items: { type: "object", properties: { id: { type: "string" }, label: { type: "string" }, createdAt: { type: "string" }, revokedAt: { type: ["string", "null"] } } },
+            },
+          },
+        },
+        401: { type: "object", properties: { error: { type: "string" } } },
+      },
+    },
+  }, async (request, reply) => {
     if (!request.user) {
       return reply.code(401).send({ error: "unauthorized" });
     }
@@ -34,7 +51,24 @@ export async function apiKeysRoutes(
     });
   });
 
-  fastify.post("/", { preHandler: [requireAuth] }, async (request, reply) => {
+  fastify.post("/", {
+    preHandler: [requireAuth],
+    schema: {
+      tags: ["API Keys"],
+      body: { type: "object", required: ["label"], properties: { label: { type: "string", minLength: 1 } } },
+      response: {
+        201: {
+          type: "object",
+          properties: {
+            key: { type: "object", properties: { id: { type: "string" }, label: { type: "string" }, createdAt: { type: "string" } } },
+            token: { type: "string" },
+          },
+        },
+        400: { type: "object", properties: { error: { type: "string" } } },
+        401: { type: "object", properties: { error: { type: "string" } } },
+      },
+    },
+  }, async (request, reply) => {
     if (!request.user) {
       return reply.code(401).send({ error: "unauthorized" });
     }
@@ -68,7 +102,14 @@ export async function apiKeysRoutes(
 
   fastify.post(
     "/:id/revoke",
-    { preHandler: [requireAuth] },
+    {
+      preHandler: [requireAuth],
+      schema: {
+        tags: ["API Keys"],
+        params: { type: "object", required: ["id"], properties: { id: { type: "string" } } },
+        response: { 200: { type: "object", properties: { success: { type: "boolean" } } }, 401: { type: "object", properties: { error: { type: "string" } } } },
+      },
+    },
     async (request, reply) => {
       if (!request.user) {
         return reply.code(401).send({ error: "unauthorized" });

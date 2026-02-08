@@ -2,6 +2,8 @@ import Fastify from "fastify";
 import helmet from "@fastify/helmet";
 import cors from "@fastify/cors";
 import cookie from "@fastify/cookie";
+import swagger from "@fastify/swagger";
+import swaggerUi from "@fastify/swagger-ui";
 import { authRoutes } from "./modules/auth/routes";
 import { apiKeysRoutes } from "./modules/api-keys/routes";
 import { quotesRoutes } from "./modules/quotes/routes";
@@ -31,7 +33,29 @@ export const createApp = () => {
     credentials: true,
   });
 
-  app.get("/health", async (_request, reply) => {
+  app.register(swagger, {
+    openapi: {
+      openapi: "3.0.0",
+      info: {
+        title: "Motivational Quotes API",
+        description: "API for motivational quotes, auth, and dashboard",
+        version: "1.0.0",
+      },
+      servers: [{ url: "/", description: "Current" }],
+    },
+  });
+
+  app.register(swaggerUi, {
+    routePrefix: "/docs",
+    uiConfig: { docExpansion: "list", deepLinking: true },
+  });
+
+  app.get("/health", {
+    schema: {
+      tags: ["Health"],
+      response: { 200: { type: "object", properties: { ok: { type: "boolean" } } } },
+    },
+  }, async (_request, reply) => {
     return reply.send({ ok: true });
   });
 
