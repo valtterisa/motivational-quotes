@@ -1,4 +1,4 @@
-import { Kafka } from "kafkajs";
+import { Kafka, type EachBatchPayload } from "kafkajs";
 import { db } from "../db/drizzle";
 import { quoteLikes, savedQuotes } from "../db/schema";
 import { and, eq } from "drizzle-orm";
@@ -19,10 +19,16 @@ async function run(): Promise<void> {
 
   const consumer = kafka.consumer({ groupId: "feed-events-consumer" });
   await consumer.connect();
-  await consumer.subscribe({ topics: ["quote-likes", "quote-saves"], fromBeginning: false });
+  await consumer.subscribe({
+    topics: ["quote-likes", "quote-saves"],
+    fromBeginning: false,
+  });
 
   await consumer.run({
-    eachBatch: async ({ batch, commitOffsetsIfNeeded }) => {
+    eachBatch: async ({
+      batch,
+      commitOffsetsIfNecessary,
+    }: EachBatchPayload) => {
       const likesMap = new Map<string, "like" | "unlike">();
       const savesMap = new Map<string, "save" | "unsave">();
 
@@ -31,11 +37,21 @@ async function run(): Promise<void> {
         const value = message.value?.toString();
         if (!key || !value) continue;
         try {
-          const payload = JSON.parse(value) as { user_id?: string; quote_id?: string; action?: string };
+          const payload = JSON.parse(value) as {
+            user_id?: string;
+            quote_id?: string;
+            action?: string;
+          };
           const action = payload.action;
-          if (batch.topic === "quote-likes" && (action === "like" || action === "unlike")) {
+          if (
+            batch.topic === "quote-likes" &&
+            (action === "like" || action === "unlike")
+          ) {
             likesMap.set(key, action);
-          } else if (batch.topic === "quote-saves" && (action === "save" || action === "unsave")) {
+          } else if (
+            batch.topic === "quote-saves" &&
+            (action === "save" || action === "unsave")
+          ) {
             savesMap.set(key, action);
           }
         } catch {
@@ -48,22 +64,42 @@ async function run(): Promise<void> {
           for (const [key, action] of likesMap) {
             const [userId, quoteId] = key.split(":");
             if (action === "like") {
-              await db.insert(quoteLikes).values({ userId, quoteId }).onConflictDoNothing();
+              await db
+                .insert(quoteLikes)
+                .values({ userId, quoteId })
+                .onConflictDoNothing();
             } else {
-              await db.delete(quoteLikes).where(and(eq(quoteLikes.userId, userId), eq(quoteLikes.quoteId, quoteId)));
+              await db
+                .delete(quoteLikes)
+                .where(
+                  and(
+                    eq(quoteLikes.userId, userId),
+                    eq(quoteLikes.quoteId, quoteId),
+                  ),
+                );
             }
           }
         } else if (batch.topic === "quote-saves") {
           for (const [key, action] of savesMap) {
             const [userId, quoteId] = key.split(":");
             if (action === "save") {
-              await db.insert(savedQuotes).values({ userId, quoteId }).onConflictDoNothing();
+              await db
+                .insert(savedQuotes)
+                .values({ userId, quoteId })
+                .onConflictDoNothing();
             } else {
-              await db.delete(savedQuotes).where(and(eq(savedQuotes.userId, userId), eq(savedQuotes.quoteId, quoteId)));
+              await db
+                .delete(savedQuotes)
+                .where(
+                  and(
+                    eq(savedQuotes.userId, userId),
+                    eq(savedQuotes.quoteId, quoteId),
+                  ),
+                );
             }
           }
         }
-        await commitOffsetsIfNeeded();
+        await commitOffsetsIfNecessary();
       } catch (err) {
         console.error("Feed consumer batch error", err);
       }
