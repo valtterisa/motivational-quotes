@@ -6,59 +6,68 @@ import { loadEnv } from "../config/env";
 
 const env = loadEnv();
 
-async function waitForTopics(
+async function ensureTopicsAndConnect(
   kafka: Kafka,
   topics: string[],
   maxRetries = 30,
   delayMs = 2000,
 ): Promise<void> {
   const admin = kafka.admin();
-  
   for (let i = 0; i < maxRetries; i++) {
     try {
       await admin.connect();
-      const topicList = await admin.listTopics();
-      const allTopicsAvailable = topics.every((topic) =>
-        topicList.includes(topic),
-      );
-
-      if (allTopicsAvailable) {
-        await admin.disconnect();
-        return;
+      const existing = await admin.listTopics();
+      const toCreate = topics.filter((t) => !existing.includes(t));
+      if (toCreate.length > 0) {
+        await admin.createTopics({
+          topics: toCreate.map((topic) => ({ topic, numPartitions: 1, replicationFactor: 1 })),
+          validateOnly: false,
+        });
       }
       await admin.disconnect();
+      return;
     } catch (err) {
       try {
         await admin.disconnect();
       } catch {
-        // Ignore disconnect errors
+        // ignore
       }
       if (i === maxRetries - 1) {
         throw new Error(
-          `Failed to connect to Kafka or topics ${topics.join(", ")} not available after ${maxRetries} retries: ${err instanceof Error ? err.message : String(err)}`,
+          `Failed to connect to Kafka after ${maxRetries} retries: ${err instanceof Error ? err.message : String(err)}`,
         );
       }
     }
-
     if (i < maxRetries - 1) {
       await new Promise((resolve) => setTimeout(resolve, delayMs));
     }
   }
+}
 
-  throw new Error(
-    `Topics ${topics.join(", ")} not available after ${maxRetries} retries`,
-  );
+const DOCKER_KAFKA_BROKER = "kafka:9092";
+
+function getBrokers(): string[] {
+  const raw = process.env.KAFKA_BROKERS ?? env.KAFKA_BROKERS ?? "";
+  const list = raw
+    .split(",")
+    .map((b) => b.trim())
+    .filter(Boolean);
+  if (list.length === 0) return [];
+  if (list.every((b) => b.startsWith("localhost:"))) {
+    return [DOCKER_KAFKA_BROKER];
+  }
+  return list;
 }
 
 async function run(): Promise<void> {
-  if (!env.KAFKA_BROKERS) {
+  const brokers = getBrokers();
+  if (brokers.length === 0) {
     console.warn("KAFKA_BROKERS not set; feed-events-consumer exiting");
     process.exit(0);
   }
 
-  const brokers = env.KAFKA_BROKERS.split(",").map((b) => b.trim());
   console.log(`Connecting to Kafka brokers: ${brokers.join(", ")}`);
-  
+
   const kafka = new Kafka({
     clientId: "feed-events-consumer",
     brokers,
@@ -71,18 +80,25 @@ async function run(): Promise<void> {
   });
 
   const topics = ["quote-likes", "quote-saves"];
-  console.log("Waiting for topics to be available...");
-  await waitForTopics(kafka, topics);
-  console.log("Topics are now available, connecting consumer...");
+  console.log("Ensuring Kafka connection and topics exist...");
+  await ensureTopicsAndConnect(kafka, topics);
+  console.log("Kafka ready, waiting for group coordinator...");
+  await new Promise((r) => setTimeout(r, 8000));
 
-  const consumer = kafka.consumer({ groupId: "feed-events-consumer" });
+  const consumer = kafka.consumer({
+    groupId: "feed-events-consumer",
+    sessionTimeout: 30000,
+    retry: { retries: 15, initialRetryTime: 1000, maxRetryTime: 10000 },
+  });
   await consumer.connect();
   console.log("Consumer connected, subscribing to topics...");
   await consumer.subscribe({
     topics,
     fromBeginning: false,
   });
-  console.log("Consumer subscribed successfully, starting to process messages...");
+  console.log(
+    "Consumer subscribed successfully, starting to process messages...",
+  );
 
   await consumer.run({
     eachBatch: async ({
@@ -177,8 +193,11 @@ async function runWithRetry(): Promise<void> {
       break;
     } catch (err) {
       retryCount++;
-      console.error(`Feed consumer failed (attempt ${retryCount}/${maxRetries}):`, err);
-      
+      console.error(
+        `Feed consumer failed (attempt ${retryCount}/${maxRetries}):`,
+        err,
+      );
+
       if (retryCount >= maxRetries) {
         console.error("Feed consumer failed after all retries, exiting");
         process.exit(1);
