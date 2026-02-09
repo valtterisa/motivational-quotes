@@ -21,7 +21,7 @@ export const signAccessToken = (user: AuthUser): string => {
   return jwt.sign(
     { id: user.id, email: user.email, role: user.role, jti },
     env.JWT_SECRET,
-    { expiresIn: "1h" },
+    { expiresIn: "7d" },
   );
 };
 

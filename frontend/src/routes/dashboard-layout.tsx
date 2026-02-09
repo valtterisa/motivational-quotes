@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "@/state/use-auth";
-import { apiCall } from "@/lib/api";
+import { apiCall, getCsrfToken } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Menu } from "lucide-react";
 
@@ -12,6 +12,7 @@ export const DashboardLayout = () => {
 
   const handleLogout = async () => {
     try {
+      await getCsrfToken();
       await apiCall("/auth/logout", { method: "POST" });
     } catch (error) {
       console.error("Logout error:", error);

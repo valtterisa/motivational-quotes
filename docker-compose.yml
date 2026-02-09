@@ -65,6 +65,28 @@ services:
       KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
       KAFKA_CONTROLLER_QUORUM_VOTERS: 0@kafka:9093
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_LOG_DIRS: /var/kafka/data
+      KAFKA_METADATA_LOG_DIR: /var/kafka/metadata
+    volumes:
+      - kafka-data:/var/kafka
+    user: root
+    entrypoint: ["/bin/bash", "-c"]
+    command: >
+      "
+      mkdir -p /var/kafka/data /var/kafka/metadata &&
+      rm -rf /tmp/kraft-combined-logs 2>/dev/null || true &&
+      if [ ! -f /var/kafka/data/meta.properties ] && [ ! -f /var/kafka/metadata/meta.properties ]; then
+        echo 'Formatting Kafka storage (first run)...' &&
+        rm -rf /var/kafka/data/* /var/kafka/metadata/* 2>/dev/null || true &&
+        CLUSTER_ID=$$(cat /proc/sys/kernel/random/uuid | tr -d '-' | cut -c1-22) &&
+        echo \"Using cluster ID: $$CLUSTER_ID\" &&
+        /opt/kafka/bin/kafka-storage.sh format -t $$CLUSTER_ID -c /opt/kafka/config/kraft/server.properties &&
+        echo 'Format completed successfully'
+      else
+        echo 'meta.properties found, skipping format'
+      fi &&
+      exec /opt/kafka/bin/kafka-server-start.sh /opt/kafka/config/kraft/server.properties
+      "
     healthcheck:
       test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --list --bootstrap-server localhost:9092 >/dev/null 2>&1 || exit 1"]
       interval: 5s
@@ -132,3 +154,4 @@ services:
 volumes:
   db-data:
   replica-data:
+  kafka-data:

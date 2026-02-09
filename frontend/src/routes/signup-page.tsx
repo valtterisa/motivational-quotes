@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/state/use-auth";
 import type { User } from "@/state/auth-context";
-import { apiCall } from "@/lib/api";
+import { apiCall, getCsrfToken } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -29,8 +29,9 @@ export const SignupPage = () => {
         "/auth/signup",
         { method: "POST", body: JSON.stringify(body) },
       ),
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
       setAuth(data.user);
+      await getCsrfToken();
       navigate("/dashboard");
     },
   });

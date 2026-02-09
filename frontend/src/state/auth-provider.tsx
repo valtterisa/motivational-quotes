@@ -11,6 +11,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       try {
         const data = await apiCall<{ user: User }>("/auth/me");
         setUser(data.user);
+        await apiCall<{ token: string }>("/auth/csrf-token");
       } catch {
         setUser(null);
       } finally {

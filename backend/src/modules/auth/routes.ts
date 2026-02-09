@@ -4,6 +4,7 @@ import { z } from "zod";
 import { db } from "../../db/drizzle";
 import { users } from "../../db/schema";
 import { signAccessToken, requireAuth, blacklistToken } from "../../middleware/auth";
+import { generateCsrfTokenCookie, requireCsrf } from "../../middleware/csrf";
 import { eq } from "drizzle-orm";
 
 const authSchema = z.object({
@@ -76,6 +77,7 @@ export async function authRoutes(
     });
 
     reply.setCookie("access_token", token, COOKIE_OPTIONS);
+    await generateCsrfTokenCookie(reply, created.id);
 
     return reply.code(201).send({
       user: { id: created.id, email: created.email, role: created.role },
@@ -133,11 +135,29 @@ export async function authRoutes(
     });
 
     reply.setCookie("access_token", token, COOKIE_OPTIONS);
+    await generateCsrfTokenCookie(reply, user.id);
 
     return reply.send({
       user: { id: user.id, email: user.email, role: user.role },
       token,
     });
+  });
+
+  fastify.get("/csrf-token", {
+    preHandler: [requireAuth],
+    schema: {
+      tags: ["Auth"],
+      response: {
+        200: { type: "object", properties: { token: { type: "string" } } },
+        401: { type: "object", properties: { error: { type: "string" } } },
+      },
+    },
+  }, async (request, reply) => {
+    if (!request.user) {
+      return reply.code(401).send({ error: "unauthorized" });
+    }
+    const token = await generateCsrfTokenCookie(reply, request.user.id);
+    return reply.send({ token });
   });
 
   fastify.get("/me", {
@@ -165,7 +185,7 @@ export async function authRoutes(
   fastify.post(
     "/logout",
     {
-      preHandler: [requireAuth],
+      preHandler: [requireAuth, requireCsrf],
       schema: { tags: ["Auth"], response: { 200: { type: "object", properties: { success: { type: "boolean" } } } } },
     },
     async (request, reply) => {

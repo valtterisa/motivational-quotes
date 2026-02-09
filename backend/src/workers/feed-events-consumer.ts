@@ -6,23 +6,83 @@ import { loadEnv } from "../config/env";
 
 const env = loadEnv();
 
+async function waitForTopics(
+  kafka: Kafka,
+  topics: string[],
+  maxRetries = 30,
+  delayMs = 2000,
+): Promise<void> {
+  const admin = kafka.admin();
+  
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      await admin.connect();
+      const topicList = await admin.listTopics();
+      const allTopicsAvailable = topics.every((topic) =>
+        topicList.includes(topic),
+      );
+
+      if (allTopicsAvailable) {
+        await admin.disconnect();
+        return;
+      }
+      await admin.disconnect();
+    } catch (err) {
+      try {
+        await admin.disconnect();
+      } catch {
+        // Ignore disconnect errors
+      }
+      if (i === maxRetries - 1) {
+        throw new Error(
+          `Failed to connect to Kafka or topics ${topics.join(", ")} not available after ${maxRetries} retries: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+    }
+
+    if (i < maxRetries - 1) {
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+  }
+
+  throw new Error(
+    `Topics ${topics.join(", ")} not available after ${maxRetries} retries`,
+  );
+}
+
 async function run(): Promise<void> {
   if (!env.KAFKA_BROKERS) {
     console.warn("KAFKA_BROKERS not set; feed-events-consumer exiting");
     process.exit(0);
   }
 
+  const brokers = env.KAFKA_BROKERS.split(",").map((b) => b.trim());
+  console.log(`Connecting to Kafka brokers: ${brokers.join(", ")}`);
+  
   const kafka = new Kafka({
     clientId: "feed-events-consumer",
-    brokers: env.KAFKA_BROKERS.split(",").map((b) => b.trim()),
+    brokers,
+    retry: {
+      retries: 10,
+      initialRetryTime: 100,
+      multiplier: 2,
+      maxRetryTime: 30000,
+    },
   });
+
+  const topics = ["quote-likes", "quote-saves"];
+  console.log("Waiting for topics to be available...");
+  await waitForTopics(kafka, topics);
+  console.log("Topics are now available, connecting consumer...");
 
   const consumer = kafka.consumer({ groupId: "feed-events-consumer" });
   await consumer.connect();
+  console.log("Consumer connected, subscribing to topics...");
   await consumer.subscribe({
-    topics: ["quote-likes", "quote-saves"],
+    topics,
     fromBeginning: false,
   });
+  console.log("Consumer subscribed successfully, starting to process messages...");
 
   await consumer.run({
     eachBatch: async ({
@@ -107,7 +167,31 @@ async function run(): Promise<void> {
   });
 }
 
-run().catch((err) => {
+async function runWithRetry(): Promise<void> {
+  const maxRetries = 5;
+  let retryCount = 0;
+
+  while (retryCount < maxRetries) {
+    try {
+      await run();
+      break;
+    } catch (err) {
+      retryCount++;
+      console.error(`Feed consumer failed (attempt ${retryCount}/${maxRetries}):`, err);
+      
+      if (retryCount >= maxRetries) {
+        console.error("Feed consumer failed after all retries, exiting");
+        process.exit(1);
+      }
+
+      const delayMs = Math.min(1000 * Math.pow(2, retryCount), 30000);
+      console.log(`Retrying in ${delayMs}ms...`);
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+  }
+}
+
+runWithRetry().catch((err) => {
   console.error("Feed consumer failed", err);
   process.exit(1);
 });
