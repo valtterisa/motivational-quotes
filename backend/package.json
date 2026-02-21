@@ -8,6 +8,8 @@
     "dev": "tsx watch src/server.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/server.js",
+    "start:public": "node dist/server-public.js",
+    "dev:public": "tsx watch src/server-public.ts",
     "seed": "tsx scripts/seed-quotes-from-jsonl.ts",
     "lint": "tsc --noEmit",
     "typecheck": "tsc --noEmit",

@@ -1,5 +1,7 @@
 export const API_BASE = (import.meta.env.VITE_API_BASE_URL || "http://localhost:3001").replace(/\/$/, "");
 
+export const PUBLIC_API_BASE = (import.meta.env.VITE_PUBLIC_API_BASE_URL || API_BASE.replace(/:\d+$/, ":3002")).replace(/\/$/, "");
+
 export class ApiError extends Error {
   status: number;
   code?: string;

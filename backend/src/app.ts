@@ -28,8 +28,14 @@ export const createApp = () => {
 
   app.register(helmet);
   app.register(cookie);
+  const allowedOrigins = new Set(env.CORS_ORIGINS.map((o) => o.toLowerCase()));
   app.register(cors, {
-    origin: env.CORS_ORIGINS.length ? env.CORS_ORIGINS : false,
+    origin: (origin, cb) => {
+      if (!origin) return cb(null, false);
+      if (allowedOrigins.has(origin.toLowerCase())) return cb(null, true);
+      if (process.env.NODE_ENV !== "production" && /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(origin)) return cb(null, true);
+      return cb(null, false);
+    },
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization", "X-API-Key", "X-CSRF-Token"],
@@ -40,8 +46,8 @@ export const createApp = () => {
     openapi: {
       openapi: "3.0.0",
       info: {
-        title: "Motivational Quotes API",
-        description: "Same base path: public (GET /api/v1/quotes, /api/v1/quotes/random) use X-API-Key; feed and dashboard use cookie auth.",
+        title: "Motivational Quotes API – Internal",
+        description: "Auth, dashboard, feed. Cookie/session auth. Public quote endpoints are on the separate public API service.",
         version: "1.0.0",
       },
       servers: [

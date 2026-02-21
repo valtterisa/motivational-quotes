@@ -8,7 +8,11 @@ services:
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-app} -d ${POSTGRES_DB:-quotes}"]
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-app} -d ${POSTGRES_DB:-quotes}",
+        ]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -17,6 +21,16 @@ services:
     image: redis:7-alpine
     ports:
       - "${REDIS_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis-public:
+    image: redis:7-alpine
+    ports:
+      - "${REDIS_PUBLIC_PORT:-6381}:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -61,6 +75,39 @@ services:
           "node",
           "-e",
           "require('http').get('http://localhost:${BACKEND_PORT:-3001}/health', (r) => { r.resume(); process.exit(r.statusCode === 200 ? 0 : 1); }).on('error', () => process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  backend-public:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis-public:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+    command: ["node", "dist/server-public.js"]
+    environment:
+      PORT: ${BACKEND_PORT:-3001}
+      PUBLIC_API_PORT: ${PUBLIC_API_PORT:-3002}
+      DATABASE_URL: postgres://${POSTGRES_USER:-app}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-quotes}
+      PUBLIC_REDIS_URL: redis://redis-public:6379
+      MONGODB_URI: mongodb://mongodb:27017/content
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://localhost:3000}
+    ports:
+      - "${PUBLIC_API_PORT:-3002}:${PUBLIC_API_PORT:-3002}"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "require('http').get('http://localhost:${PUBLIC_API_PORT:-3002}/health', (r) => { r.resume(); process.exit(r.statusCode === 200 ? 0 : 1); }).on('error', () => process.exit(1))",
         ]
       interval: 30s
       timeout: 10s

@@ -1,13 +1,16 @@
 import type { FastifyRequest, FastifyReply } from "fastify";
 import { redisClient } from "../redis/client";
 
-export const createRateLimiter = (
+type RedisLike = { isOpen: boolean; incr(key: string): Promise<number>; expire(key: string, s: number): Promise<boolean>; ttl(key: string): Promise<number> };
+
+export function createRateLimiterWithClient(
+  client: RedisLike,
   windowMs: number,
   maxRequests: number,
   keyGenerator: (request: FastifyRequest) => string,
-) => {
+) {
   return async (request: FastifyRequest, reply: FastifyReply) => {
-    if (!redisClient.isOpen) {
+    if (!client.isOpen) {
       return;
     }
     try {
@@ -16,12 +19,12 @@ export const createRateLimiter = (
         return;
       }
       const key = `rate:${keyBase}`;
-      const current = await redisClient.incr(key);
+      const current = await client.incr(key);
       if (current === 1) {
-        await redisClient.expire(key, Math.ceil(windowMs / 1000));
+        await client.expire(key, Math.ceil(windowMs / 1000));
       }
       if (current > maxRequests) {
-        const ttl = await redisClient.ttl(key);
+        const ttl = await client.ttl(key);
         return reply
           .code(429)
           .send({ error: "rate_limit_exceeded", retryAfter: ttl });
@@ -35,7 +38,13 @@ export const createRateLimiter = (
       console.error("Rate limiter error", err);
     }
   };
-};
+}
+
+export const createRateLimiter = (
+  windowMs: number,
+  maxRequests: number,
+  keyGenerator: (request: FastifyRequest) => string,
+) => createRateLimiterWithClient(redisClient, windowMs, maxRequests, keyGenerator);
 
 export const apiRateLimit = createRateLimiter(
   15 * 60 * 1000,

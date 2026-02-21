@@ -3,7 +3,11 @@ import jwt from "jsonwebtoken";
 import { loadEnv } from "../config/env";
 import { redisClient } from "../redis/client";
 
-const env = loadEnv();
+function getJwtSecret(): string {
+  const secret = loadEnv().JWT_SECRET;
+  if (!secret) throw new Error("JWT_SECRET is required for auth");
+  return secret;
+}
 
 export interface AuthUser {
   id: string;
@@ -20,7 +24,7 @@ export const signAccessToken = (user: AuthUser): string => {
   const jti = crypto.randomUUID();
   return jwt.sign(
     { id: user.id, email: user.email, role: user.role, jti },
-    env.JWT_SECRET,
+    getJwtSecret(),
     { expiresIn: "7d" },
   );
 };
@@ -53,8 +57,15 @@ export const requireAuth = async (
     return reply.code(401).send({ error: "missing_token" });
   }
 
+  let secret: string;
   try {
-    const decoded = jwt.verify(token, env.JWT_SECRET) as TokenPayload;
+    secret = getJwtSecret();
+  } catch {
+    return reply.code(500).send({ error: "server_config" });
+  }
+
+  try {
+    const decoded = jwt.verify(token, secret) as unknown as TokenPayload;
 
     if (decoded.jti && (await isTokenBlacklisted(decoded.jti))) {
       return reply.code(401).send({ error: "token_revoked" });
@@ -62,7 +73,8 @@ export const requireAuth = async (
 
     request.user = { id: decoded.id, email: decoded.email, role: decoded.role };
     request.jti = decoded.jti;
-    request.tokenExp = typeof decoded.exp === "number" ? decoded.exp : undefined;
+    request.tokenExp =
+      typeof decoded.exp === "number" ? decoded.exp : undefined;
   } catch {
     return reply.code(401).send({ error: "invalid_token" });
   }
@@ -81,12 +93,19 @@ export const optionalAuth = async (
     }
   }
   if (!token) return;
+  let secret: string;
   try {
-    const decoded = jwt.verify(token, env.JWT_SECRET) as TokenPayload;
+    secret = getJwtSecret();
+  } catch {
+    return;
+  }
+  try {
+    const decoded = jwt.verify(token, secret) as unknown as TokenPayload;
     if (decoded.jti && (await isTokenBlacklisted(decoded.jti))) return;
     request.user = { id: decoded.id, email: decoded.email, role: decoded.role };
     request.jti = decoded.jti;
-    request.tokenExp = typeof decoded.exp === "number" ? decoded.exp : undefined;
+    request.tokenExp =
+      typeof decoded.exp === "number" ? decoded.exp : undefined;
   } catch {
     // ignore invalid token
   }

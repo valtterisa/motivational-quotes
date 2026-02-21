@@ -1,3 +1,4 @@
+import type { Db } from "mongodb";
 import { getContentDb } from "./client";
 import type { QuoteDoc } from "./types";
 
@@ -16,8 +17,8 @@ function toQuoteDoc(raw: Record<string, unknown>): QuoteDoc {
   };
 }
 
-export async function listQuotes(opts: { author?: string; cursor?: string; limit: number }): Promise<{ items: QuoteDoc[]; nextCursor: string | null }> {
-  const db = await getContentDb();
+export async function listQuotes(opts: { author?: string; cursor?: string; limit: number }, getDb?: () => Promise<Db>): Promise<{ items: QuoteDoc[]; nextCursor: string | null }> {
+  const db = getDb ? await getDb() : await getContentDb();
   const coll = db.collection(QUOTES);
   const filter: Record<string, unknown> = {};
   if (opts.author) {
@@ -47,8 +48,8 @@ export async function listQuotes(opts: { author?: string; cursor?: string; limit
   return { items, nextCursor };
 }
 
-export async function getRandomQuote(): Promise<QuoteDoc | null> {
-  const db = await getContentDb();
+export async function getRandomQuote(getDb?: () => Promise<Db>): Promise<QuoteDoc | null> {
+  const db = getDb ? await getDb() : await getContentDb();
   const coll = db.collection(QUOTES);
   const pipeline = [{ $sample: { size: 1 } }];
   const rows = await coll.aggregate(pipeline).toArray();

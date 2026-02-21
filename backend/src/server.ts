@@ -5,6 +5,9 @@ import { redisClient } from "./redis/client";
 import { runSeedIfEmpty } from "./seed";
 
 const env = loadEnv();
+if (!env.JWT_SECRET) {
+  throw new Error("JWT_SECRET is required for internal backend");
+}
 const app = createApp();
 
 const startServer = async () => {
