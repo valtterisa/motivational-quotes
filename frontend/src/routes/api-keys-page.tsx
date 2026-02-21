@@ -88,10 +88,16 @@ export const ApiKeysPage = () => {
   }
 
   return (
-    <div className="space-y-6">
-      <Card>
+    <div className="space-y-6 max-w-3xl">
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight">API Keys</h1>
+        <p className="text-muted-foreground text-sm mt-0.5">
+          Create and revoke keys for the public API
+        </p>
+      </div>
+      <Card className="border-0 shadow-sm">
         <CardHeader>
-          <CardTitle>API Keys</CardTitle>
+          <CardTitle className="text-lg">Create key</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           {createdKey && (
@@ -130,9 +136,9 @@ export const ApiKeysPage = () => {
           </form>
         </CardContent>
       </Card>
-      <Card>
+      <Card className="border-0 shadow-sm">
         <CardHeader>
-          <CardTitle>Your keys</CardTitle>
+          <CardTitle className="text-lg">Your keys</CardTitle>
         </CardHeader>
         <CardContent>
           <Table>

@@ -53,62 +53,60 @@ export const SavedPage = () => {
 
   if (isLoading) {
     return (
-      <Card>
-        <CardContent className="py-8">
-          <p className="text-muted-foreground text-sm">Loading...</p>
-        </CardContent>
-      </Card>
+      <div className="space-y-4 max-w-3xl">
+        <div className="h-8 w-40 bg-muted rounded-lg animate-pulse" />
+        <Card className="border-0 shadow-sm">
+          <CardContent className="py-12">
+            <p className="text-muted-foreground text-sm text-center">Loading...</p>
+          </CardContent>
+        </Card>
+      </div>
     );
   }
 
   if (isError) {
     return (
-      <Alert variant="destructive">
+      <Alert variant="destructive" className="max-w-3xl">
         <AlertDescription>Error: {error?.message}</AlertDescription>
       </Alert>
     );
   }
 
   return (
-    <div className="space-y-4">
-      <Card>
-        <CardContent className="pt-6">
-          <h1 className="text-2xl font-semibold">Saved Quotes</h1>
-          <p className="text-muted-foreground text-sm mt-1">
-            Quotes you've saved for later
-          </p>
-        </CardContent>
-      </Card>
+    <div className="space-y-6 max-w-3xl">
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight">Saved Quotes</h1>
+        <p className="text-muted-foreground text-sm mt-0.5">
+          Quotes you&apos;ve saved for later
+        </p>
+      </div>
 
       {quotes.length === 0 ? (
-        <Card>
-          <CardContent className="py-8">
+        <Card className="border-0 shadow-sm">
+          <CardContent className="py-12">
             <p className="text-center text-muted-foreground">
-              You haven't saved any quotes yet.
+              You haven&apos;t saved any quotes yet.
             </p>
           </CardContent>
         </Card>
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-5">
           {quotes.map((q) => (
-            <Card key={q.id} className="overflow-hidden">
-              <CardContent className="pt-6 pb-2">
-                <p
-                  className="text-lg leading-relaxed"
-                  style={{ minHeight: "44px" }}
-                >
+            <Card key={q.id} className="overflow-hidden border-0 shadow-sm bg-card/80 hover:shadow-md transition-shadow">
+              <CardContent className="pt-6 pb-2 px-6">
+                <p className="text-xl leading-relaxed text-foreground/95 font-medium">
                   {q.text}
                 </p>
                 {q.author && (
-                  <p className="text-sm text-muted-foreground mt-2">
+                  <p className="text-sm text-muted-foreground mt-3 font-medium">
                     — {q.author}
                   </p>
                 )}
-                <p className="text-xs text-muted-foreground mt-1">
+                <p className="text-xs text-muted-foreground/80 mt-2">
                   {new Date(q.createdAt).toLocaleDateString()}
                 </p>
               </CardContent>
-              <CardFooter className="flex gap-2 border-t pt-4 pb-6 px-6">
+              <CardFooter className="flex gap-2 border-t border-border/60 pt-4 pb-6 px-6">
                 <Button
                   variant="ghost"
                   size="sm"

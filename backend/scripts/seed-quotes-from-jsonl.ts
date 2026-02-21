@@ -1,10 +1,14 @@
-import { createReadStream } from "fs";
+import { config } from "dotenv";
+import { createReadStream, existsSync } from "fs";
 import { createInterface } from "readline";
 import { join } from "path";
-import { existsSync } from "fs";
 import type { QuoteDoc } from "../src/store/types";
 import { insertQuotes } from "../src/store/content";
 import { getMongoClient, closeMongoClient } from "../src/store/client";
+
+const cwd = process.cwd();
+config({ path: join(cwd, ".env") });
+config({ path: join(cwd, "..", ".env") });
 
 const JSONL_NAME = "english_quotes/quotes.jsonl";
 
@@ -13,12 +17,17 @@ function findJsonlPath(): string {
   const fromRoot = join(process.cwd(), JSONL_NAME);
   if (existsSync(fromBackend)) return fromBackend;
   if (existsSync(fromRoot)) return fromRoot;
-  throw new Error(`Could not find ${JSONL_NAME} from ${process.cwd()}. Tried: ${fromBackend}, ${fromRoot}`);
+  throw new Error(
+    `Could not find ${JSONL_NAME} from ${process.cwd()}. Tried: ${fromBackend}, ${fromRoot}`,
+  );
 }
 
 async function main() {
   const path = findJsonlPath();
-  const rl = createInterface({ input: createReadStream(path), crlfDelay: Infinity });
+  const rl = createInterface({
+    input: createReadStream(path),
+    crlfDelay: Infinity,
+  });
   const docs: QuoteDoc[] = [];
   const now = new Date();
 
@@ -31,7 +40,10 @@ async function main() {
       if (!text) continue;
       docs.push({
         id: crypto.randomUUID(),
-        author: typeof row.author === "string" && row.author.length > 0 ? row.author.trim() : null,
+        author:
+          typeof row.author === "string" && row.author.length > 0
+            ? row.author.trim()
+            : null,
         text,
         createdBy: null,
         createdAt: now,

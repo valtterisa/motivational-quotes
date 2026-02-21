@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState } from "react";
+import { useRef, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   useInfiniteQuery,
@@ -22,8 +22,6 @@ export interface FeedQuote {
   saved?: boolean;
 }
 
-type FeedSort = "newest" | "popular";
-
 interface FeedResponse {
   items: FeedQuote[];
   nextCursor?: string | null;
@@ -36,7 +34,6 @@ export const FeedPage = () => {
   const { user, clearAuth } = useAuth();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [sort, setSort] = useState<FeedSort>("newest");
   const sentinelRef = useRef<HTMLDivElement>(null);
 
   const handleLogout = async () => {
@@ -51,9 +48,12 @@ export const FeedPage = () => {
   };
 
   const header = (
-    <header className="sticky top-0 z-20 bg-background/95 backdrop-blur border-b shrink-0">
+    <header className="sticky top-0 z-20 bg-background/95 backdrop-blur border-b border-border/80 shrink-0">
       <div className="max-w-xl mx-auto px-4 py-3 flex items-center justify-between gap-2">
-        <Link to="/" className="font-semibold text-lg min-h-[44px] flex items-center">
+        <Link
+          to="/"
+          className="font-semibold text-lg tracking-tight min-h-[44px] flex items-center text-foreground hover:text-foreground/90"
+        >
           Motivational Quotes
         </Link>
         <nav className="flex items-center gap-2">
@@ -106,23 +106,16 @@ export const FeedPage = () => {
     hasNextPage,
     isFetchingNextPage,
   } = useInfiniteQuery({
-    queryKey: queryKeys.feed(sort),
+    queryKey: queryKeys.feed("newest"),
     queryFn: async ({ pageParam }) => {
       const params = new URLSearchParams();
       params.set("limit", String(PAGE_SIZE));
-      params.set("sort", sort);
-      if (sort === "popular") {
-        params.set("offset", String(pageParam ?? 0));
-      } else if (pageParam) {
-        params.set("cursor", String(pageParam));
-      }
+      params.set("sort", "newest");
+      if (pageParam) params.set("cursor", String(pageParam));
       return apiCall<FeedResponse>(`/api/v1/feed?${params.toString()}`);
     },
-    initialPageParam: undefined as string | number | undefined,
-    getNextPageParam: (lastPage) => {
-      if (sort === "popular") return lastPage.nextOffset ?? undefined;
-      return lastPage.nextCursor ?? undefined;
-    },
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
   });
 
   useEffect(() => {
@@ -150,12 +143,12 @@ export const FeedPage = () => {
         ? apiCall(`/api/v1/feed/likes/${quoteId}`, { method: "POST" })
         : apiCall(`/api/v1/feed/likes/${quoteId}`, { method: "DELETE" }),
     onMutate: async ({ quoteId, action }) => {
-      await queryClient.cancelQueries({ queryKey: queryKeys.feed(sort) });
+      await queryClient.cancelQueries({ queryKey: queryKeys.feed("newest") });
       const prev = queryClient.getQueryData<{ pages: FeedResponse[] }>(
-        queryKeys.feed(sort),
+        queryKeys.feed("newest"),
       );
       queryClient.setQueryData(
-        queryKeys.feed(sort),
+        queryKeys.feed("newest"),
         (old: { pages: FeedResponse[] } | undefined) => {
           if (!old) return old;
           return {
@@ -178,10 +171,11 @@ export const FeedPage = () => {
       return { prev };
     },
     onError: (_err, _vars, ctx) => {
-      if (ctx?.prev) queryClient.setQueryData(queryKeys.feed(sort), ctx.prev);
+      if (ctx?.prev)
+        queryClient.setQueryData(queryKeys.feed("newest"), ctx.prev);
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.feed(sort) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.feed("newest") });
     },
   });
 
@@ -197,12 +191,12 @@ export const FeedPage = () => {
         ? apiCall(`/api/v1/feed/saved/${quoteId}`, { method: "POST" })
         : apiCall(`/api/v1/feed/saved/${quoteId}`, { method: "DELETE" }),
     onMutate: async ({ quoteId, action }) => {
-      await queryClient.cancelQueries({ queryKey: queryKeys.feed(sort) });
+      await queryClient.cancelQueries({ queryKey: queryKeys.feed("newest") });
       const prev = queryClient.getQueryData<{ pages: FeedResponse[] }>(
-        queryKeys.feed(sort),
+        queryKeys.feed("newest"),
       );
       queryClient.setQueryData(
-        queryKeys.feed(sort),
+        queryKeys.feed("newest"),
         (old: { pages: FeedResponse[] } | undefined) => {
           if (!old) return old;
           return {
@@ -219,10 +213,11 @@ export const FeedPage = () => {
       return { prev };
     },
     onError: (_err, _vars, ctx) => {
-      if (ctx?.prev) queryClient.setQueryData(queryKeys.feed(sort), ctx.prev);
+      if (ctx?.prev)
+        queryClient.setQueryData(queryKeys.feed("newest"), ctx.prev);
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.feed(sort) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.feed("newest") });
     },
   });
 
@@ -233,10 +228,6 @@ export const FeedPage = () => {
       <div className="min-h-svh flex flex-col">
         {header}
         <div className="max-w-xl mx-auto w-full px-4 py-4 pb-safe flex-1">
-          <div className="flex gap-2 mb-4">
-            <div className="h-10 w-20 bg-muted rounded-md animate-pulse" />
-            <div className="h-10 w-20 bg-muted rounded-md animate-pulse" />
-          </div>
           <div className="space-y-4">
             {[1, 2, 3, 4, 5].map((i) => (
               <Card key={i} className="p-6">
@@ -278,48 +269,26 @@ export const FeedPage = () => {
     <div className="min-h-svh flex flex-col text-base">
       {header}
       <div className="max-w-xl mx-auto w-full px-4 py-4 pb-safe flex-1">
-        <div className="sticky top-0 z-10 bg-background/95 backdrop-blur py-2 -mx-4 px-4 flex gap-2 border-b">
-          <Button
-            variant={sort === "newest" ? "secondary" : "ghost"}
-            size="sm"
-            className="min-h-[44px] flex-1"
-            onClick={() => setSort("newest")}
-          >
-            Newest
-          </Button>
-          <Button
-            variant={sort === "popular" ? "secondary" : "ghost"}
-            size="sm"
-            className="min-h-[44px] flex-1"
-            onClick={() => setSort("popular")}
-          >
-            Popular
-          </Button>
-        </div>
-
         {items.length === 0 ? (
           <p className="text-center text-muted-foreground py-12">
             No quotes yet.
           </p>
         ) : (
-          <ul className="space-y-4 mt-4 list-none p-0">
+          <ul className="space-y-5 list-none p-0">
             {items.map((q) => (
               <li key={q.id}>
                 <article>
-                  <Card className="overflow-hidden">
-                    <CardContent className="pt-6 pb-2">
-                      <p
-                        className="text-lg leading-relaxed"
-                        style={{ minHeight: "44px" }}
-                      >
+                  <Card className="overflow-hidden border-0 shadow-sm bg-card/80 hover:shadow-md transition-shadow">
+                    <CardContent className="pt-6 pb-2 px-6">
+                      <p className="text-xl leading-relaxed text-foreground/95 font-medium">
                         {q.text}
                       </p>
                       {q.author && (
-                        <p className="text-sm text-muted-foreground mt-2">
+                        <p className="text-sm text-muted-foreground mt-3 font-medium">
                           — {q.author}
                         </p>
                       )}
-                      <p className="text-xs text-muted-foreground mt-1">
+                      <p className="text-xs text-muted-foreground/80 mt-2">
                         {new Date(q.createdAt).toLocaleDateString()}
                       </p>
                     </CardContent>

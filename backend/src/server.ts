@@ -2,6 +2,7 @@ import { createApp } from "./app";
 import { loadEnv } from "./config/env";
 import { runMigrations } from "./db/migrate";
 import { redisClient } from "./redis/client";
+import { runSeedIfEmpty } from "./seed";
 
 const env = loadEnv();
 const app = createApp();
@@ -13,6 +14,13 @@ const startServer = async () => {
     // eslint-disable-next-line no-console
     console.error("Migrations failed:", err);
     process.exit(1);
+  }
+
+  try {
+    await runSeedIfEmpty();
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error("Seed failed (continuing):", err);
   }
 
   try {

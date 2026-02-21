@@ -46,10 +46,10 @@ export const SignupPage = () => {
     : null;
 
   return (
-    <div className="min-h-svh flex items-center justify-center bg-muted/30 p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader>
-          <CardTitle>Sign up</CardTitle>
+    <div className="min-h-svh flex items-center justify-center bg-muted/40 p-4">
+      <Card className="w-full max-w-md border-0 shadow-lg">
+        <CardHeader className="space-y-1">
+          <CardTitle className="text-2xl tracking-tight">Sign up</CardTitle>
           <CardDescription>Create an account to get an API key.</CardDescription>
         </CardHeader>
         <form onSubmit={handleSubmit}>

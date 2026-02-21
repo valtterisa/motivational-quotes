@@ -1,0 +1,6 @@
+.git
+.env
+*.log
+backend/node_modules
+backend/dist
+english_quotes/.git

@@ -4,10 +4,10 @@ WORKDIR /app
 
 RUN corepack enable && corepack prepare pnpm@10.17.1 --activate
 
-COPY package.json pnpm-lock.yaml* ./
+COPY backend/package.json backend/pnpm-lock.yaml* ./
 RUN pnpm install
 
-COPY . .
+COPY backend/ .
 RUN pnpm build
 
 FROM node:20-alpine
@@ -16,11 +16,12 @@ WORKDIR /app
 
 RUN corepack enable && corepack prepare pnpm@10.17.1 --activate
 
-COPY package.json pnpm-lock.yaml* ./
+COPY backend/package.json backend/pnpm-lock.yaml* ./
 RUN pnpm install --prod
 
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/migrations ./migrations
+COPY english_quotes ./english_quotes
 
 EXPOSE 3001
 

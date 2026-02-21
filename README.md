@@ -1,306 +1,144 @@
 # Motivational Quotes API
 
-A production-ready API for motivational quotes with user authentication, API key management, rate limiting, and caching. Built for high throughput with Fastify, optional read replica, and Redis caching.
+API and web app for motivational quotes: auth, feed, dashboard (my quotes, liked, saved), and a public API (API key) for use on your own site. Postgres for auth, MongoDB for content, Redis for cache and rate limiting. All services run locally via Docker Compose.
 
 ## Features
 
-- **User Authentication**: Email/password signup and login with JWT tokens (HTTP-only cookie or Bearer header)
-- **RBAC**: Admin and user roles with permission-based access
-- **API Key Management**: Generate and revoke API keys from the dashboard
-- **Quotes CRUD**: Create, read, update, and delete quotes
-- **Infinite Feed**: `GET /feed` with cursor-based pagination (read replica for scale)
-- **Public API**: Access quotes via API keys with rate limiting
-- **Rate Limiting**: Redis-backed rate limiting per IP and API key
-- **Caching**: Redis cache for random quote (60s TTL)
-- **Cursor-based Pagination**: Efficient pagination for list and feed
+- **Auth**: Email/password signup and login (JWT in HTTP-only cookie or Bearer header)
+- **RBAC**: Admin and user roles
+- **API keys**: Create and revoke from the dashboard; use in the public API
+- **Feed**: Browse quotes, like and save (optional auth). Sort by newest (cursor) or popular (offset)
+- **Dashboard**: CRUD your quotes, view liked and saved
+- **Public API**: `GET /api/v1/quotes/random` and `GET /api/v1/quotes` (author, cursor, limit) with `X-API-Key`
+- **Rate limiting**: Redis-backed, per IP and per API key
+- **Caching**: Redis for random quote (60s) and by-author list (5 min)
 - **CORS**: Configurable allowed origins
-- **Docker**: Full stack with docker-compose (PostgreSQL primary + read replica, Redis, backend, frontend)
-- **TypeScript**: Typed backend and frontend
-- **CI**: GitHub Actions for tests and builds
 
-## Tech Stack
+## Tech stack
 
-### Backend
-- Fastify
-- TypeScript
-- Drizzle ORM
-- PostgreSQL (primary + optional read replica)
-- Redis (rate limit, JWT blacklist, random-quote cache)
-- JWT authentication
-- @fastify/helmet for security
+- **Backend**: Fastify, TypeScript, Drizzle (Postgres for users + API keys), MongoDB for quotes/likes/saves, Redis (cache, rate limit, JWT blacklist)
+- **Frontend**: React, Vite, React Router, TypeScript
+- **Local stack**: Postgres, Redis, and MongoDB run as Docker Compose services; no external DBs required.
 
-### Frontend
-- React
-- Vite
-- React Router
-- TypeScript
-
-## Getting Started
+## Getting started
 
 ### Prerequisites
 
-- Node.js 20+
-- pnpm 10.17.1+
-- Docker and Docker Compose (for full stack)
-- PostgreSQL and Redis (if running backend locally without Docker)
+- Docker and Docker Compose
+- For running backend/frontend on host: Node.js 20+, pnpm 10.17.1+
 
-### Local Development
+### Env and run
 
-1. Clone the repository:
+1. Clone and install (if running on host):
+
 ```bash
 git clone <repo-url>
 cd motivational-quotes
-```
-
-2. Install dependencies:
-```bash
 pnpm install
 ```
 
-3. Set up environment variables:
+2. Copy env and set required values:
 
-Create `.env` from the root (see `.env.example`). For local backend/frontend without Docker:
-
-**Backend** (e.g. `backend/.env` or root `.env` used by backend):
-```
-PORT=3001
-DATABASE_URL=postgres://app:yourpassword@localhost:5432/quotes
-REDIS_URL=redis://localhost:6379
-JWT_SECRET=your-secret-key-change-in-production
-CORS_ORIGINS=http://localhost:5173,http://localhost:3000
-```
-
-Optional:
-- `DATABASE_READ_URL`: Read replica URL (if unset, feed and read paths use primary)
-- `DB_POOL_MAX`: Connection pool size (default 10)
-
-**Frontend**:
-```
-VITE_API_BASE_URL=http://localhost:3001
-```
-
-4. Start services with Docker Compose:
-```bash
-docker compose up -d
-```
-
-This starts PostgreSQL (primary + read replica), Redis, backend, and frontend. Migrations run on backend startup. For a fresh DB, the replica is bootstrapped from the primary via streaming replication.
-
-5. Or run backend and frontend locally:
-
-Terminal 1 (backend):
-```bash
-cd backend
-pnpm dev
-```
-
-Terminal 2 (frontend):
-```bash
-cd frontend
-pnpm dev
-```
-
-- Frontend: http://localhost:5173
-- Backend API: http://localhost:3001
-
-## Docker Deployment
-
-1. Copy env template and set required variables:
 ```bash
 cp .env.example .env
-# Set POSTGRES_PASSWORD and JWT_SECRET (use strong values in production)
 ```
 
-2. Start the stack:
+Set at least: `POSTGRES_PASSWORD`, `JWT_SECRET`. Optionally `POSTGRES_USER`, `POSTGRES_DB`, `CORS_ORIGINS`, `VITE_API_BASE_URL`. See `.env.example`.
+
+3. Run everything locally (Postgres, Redis, MongoDB, backend, frontend):
+
 ```bash
 docker compose up --build
 ```
 
-Services:
-- **db**: PostgreSQL primary
-- **postgres-replica**: Read-only replica (streaming replication) for feed and read-heavy paths
-- **redis**: Redis
-- **backend**: Fastify API (port 3001 or `BACKEND_PORT`)
-- **frontend**: Static app (port 3000 or `FRONTEND_PORT`)
+Backend runs migrations on startup, then seeds the DB from `english_quotes/quotes.jsonl` if the quotes collection is empty (first-time spin-up). If `quotes.jsonl` is in Git LFS, run `git lfs pull` before `docker compose build` so the image gets the real file. First start may take a moment for Postgres to become ready; if the backend exits once, run `docker compose up` again.
 
-Required in `.env`: `POSTGRES_PASSWORD`, `JWT_SECRET`. See `.env.example` for optional vars (`DATABASE_READ_URL`, `DB_POOL_MAX`, etc.).
+- Frontend: http://localhost:3000 (or `FRONTEND_PORT`)
+- Backend: http://localhost:3001 (or `BACKEND_PORT`)
+- OpenAPI: http://localhost:3001/docs
 
-### Verify replication
+**Option B – Backend and frontend on host (DBs in Docker)**
 
-With the stack running (including `postgres-replica` and `DATABASE_READ_URL`), you can confirm data replicates from primary to replica:
-
-**1. Using the app**
-
-- Sign up / log in, create a quote in the dashboard.
-- Call `GET /feed?limit=5` (or use the feed in the UI). The feed reads from the replica; the new quote should appear after a short delay (usually &lt; 1 s).
-
-**2. Using psql (primary vs replica)**
-
-From the project root (replace `yourpassword` and container names if different):
+Start only the data services:
 
 ```bash
-# Insert on primary (db)
-docker exec -it motivational-quotes-db-1 psql -U app -d quotes -c "INSERT INTO quotes (text, author) VALUES ('Replication test', 'You');"
-
-# Wait a second, then read from replica (read-only)
-docker exec -it motivational-quotes-postgres-replica-1 psql -U app -d quotes -c "SELECT id, text, author, created_at FROM quotes ORDER BY created_at DESC LIMIT 5;"
+docker compose up -d postgres redis mongodb
 ```
 
-If the new row appears in the replica output, replication is working. Replica lag is usually sub-second.
+In `.env` set `DATABASE_URL`, `REDIS_URL`, `MONGODB_URI` to reach localhost (e.g. `postgres://app:yourpassword@localhost:5432/quotes`, `redis://localhost:6379`, `mongodb://localhost:27017/content`). Then:
 
-**3. Check replica lag (optional)**
-
-On the replica:
+Terminal 1 (backend):
 
 ```bash
-docker exec -it motivational-quotes-postgres-replica-1 psql -U app -d quotes -c "SELECT now() - pg_last_xact_replay_timestamp() AS replica_lag;"
+cd backend && pnpm dev
 ```
 
-`replica_lag` should be small (e.g. 00:00:00.xxx); NULL means no replay yet.
+Terminal 2 (frontend):
 
-## API Documentation
-
-### Health
 ```bash
-GET /health
-```
-Returns `{ "ok": true }`.
-
-### Authentication
-
-**Sign Up**
-```bash
-POST /auth/signup
-Content-Type: application/json
-
-{ "email": "user@example.com", "password": "password123" }
+cd frontend && pnpm dev
 ```
 
-**Login**
-```bash
-POST /auth/login
-Content-Type: application/json
+- Frontend: http://localhost:5173
+- Backend: http://localhost:3001
+- OpenAPI: http://localhost:3001/docs
 
-{ "email": "user@example.com", "password": "password123" }
-```
-Cookie `access_token` is set (or use `Authorization: Bearer <token>`).
+To seed manually (e.g. when not using Docker): run `pnpm seed` from repo root or `pnpm seed` in the backend directory. Requires MongoDB running and `.env` with `DATABASE_URL`, `MONGODB_URI`, etc.
 
-**Me**
-```bash
-GET /auth/me
-Authorization: Bearer <token>   # or cookie
-```
+## API overview
 
-**Logout**
-```bash
-POST /auth/logout
-Authorization: Bearer <token>
-```
+Base URL for API: `http://localhost:3001` (or your backend URL).
 
-### Feed (no auth, uses read replica when configured)
-```bash
-GET /feed?limit=20&cursor=<uuid>
-```
-Response: `{ "items": [...], "nextCursor": "uuid-or-null" }`
+| Area       | Auth       | Paths                                                                                                        |
+| ---------- | ---------- | ------------------------------------------------------------------------------------------------------------ |
+| Health     | —          | `GET /health`                                                                                                |
+| Auth       | —          | `POST /auth/signup`, `POST /auth/login`, `GET /auth/me`, `POST /auth/logout`                                 |
+| API keys   | Cookie/JWT | `GET /dashboard/api-keys`, `POST /dashboard/api-keys`, `POST /dashboard/api-keys/:id/revoke`                 |
+| Feed       | Optional   | `GET /api/v1/feed`, `POST/DELETE /api/v1/feed/likes/:quoteId`, `POST/DELETE /api/v1/feed/saved/:quoteId`     |
+| Dashboard  | Cookie/JWT | `GET/POST/PUT/DELETE /api/v1/dashboard/quotes`, `GET /api/v1/dashboard/liked`, `GET /api/v1/dashboard/saved` |
+| Public API | X-API-Key  | `GET /api/v1/quotes/random`, `GET /api/v1/quotes?author=&cursor=&limit=`                                     |
 
-### Public API (requires API key)
+- **Public API** (API key): read-only; for embedding on your site.
+- **Feed / dashboard**: cookie (or Bearer) auth; feed is browsable without auth, with optional like/save when logged in.
 
-Send `x-api-key` header.
+Full OpenAPI spec and Swagger UI: `GET /docs` on the backend.
 
-**Random quote** (cached in Redis 60s):
-```bash
-GET /api/v1/quotes/random
-x-api-key: your-api-key
-```
+## Rate limiting
 
-**List quotes** (cursor pagination):
-```bash
-GET /api/v1/quotes?limit=20&cursor=<uuid>
-x-api-key: your-api-key
-```
-Response: `{ "items": [...], "nextCursor": "uuid-or-null" }`
+- `/api/v1/*`: 100 req / 15 min per API key or IP
+- `/auth/*`: 10 req / 15 min per IP
 
-### Dashboard (requires JWT)
-
-Use `Authorization: Bearer <token>` or cookie.
-
-**List your quotes**
-```bash
-GET /dashboard/quotes
-```
-
-**Create quote**
-```bash
-POST /dashboard/quotes
-Content-Type: application/json
-{ "text": "Your quote", "author": "Optional" }
-```
-
-**Update quote**
-```bash
-PUT /dashboard/quotes/:id
-Content-Type: application/json
-{ "text": "Updated", "author": "Optional" }
-```
-
-**Delete quote**
-```bash
-DELETE /dashboard/quotes/:id
-```
-
-### API Keys
-- `GET /dashboard/api-keys` – list keys
-- `POST /dashboard/api-keys` – create (body: `{ "label": "My Key" }`); response includes `token` once
-- `POST /dashboard/api-keys/:id/revoke` – revoke
-
-## Rate Limiting
-
-- **Public API** (`/api/v1/*`): 100 requests per 15 minutes per API key or IP
-- **Auth** (`/auth/*`): 10 requests per 15 minutes per IP
-
-Headers: `X-RateLimit-Limit`, `X-RateLimit-Remaining`. On exceed: `429` with `{ "error": "rate_limit_exceeded", "retryAfter": <seconds> }`.
+Response headers: `X-RateLimit-Limit`, `X-RateLimit-Remaining`. On exceed: `429` with `retryAfter`.
 
 ## Security
 
-- RBAC (admin/user)
-- CORS whitelist
+- CORS allowlist (`CORS_ORIGINS`)
 - bcrypt (12 rounds) for passwords
-- SHA-256 hashed API keys
+- API keys stored hashed (SHA-256)
 - JWT blacklist in Redis
 - @fastify/helmet
 - Rate limiting
 
-## Testing
+## Tests
 
-**Backend**
 ```bash
 cd backend && pnpm test
-```
-
-**Frontend**
-```bash
 cd frontend && pnpm test
 ```
 
-## Project Structure
-
-Two deployable folders; Railway provides Postgres, Redis, and MongoDB (env vars). See [docs/RAILWAY-DEPLOY.md](docs/RAILWAY-DEPLOY.md).
+## Project structure
 
 ```
 motivational-quotes/
-├── backend/                    # API – Dockerfile, deploy as one service
-│   ├── src/
-│   │   ├── app.ts
-│   │   ├── config/, db/, redis/, middleware/, modules/, store/
-│   │   └── ...
-│   ├── migrations/
+├── backend/                 # API – Dockerfile
+│   ├── src/                 # app, config, db (Drizzle), redis, middleware, modules, store (MongoDB)
+│   ├── migrations/          # Postgres migrations
 │   └── Dockerfile
-├── frontend/                   # Web app – Dockerfile, deploy as one service
+├── frontend/                # Web app – Dockerfile
 │   ├── src/
-│   │   ├── routes/, components/, lib/
-│   │   └── ...
 │   └── Dockerfile
-├── docker-compose.yml          # Backend + frontend (expects DATABASE_URL, REDIS_URL, MONGODB_URI from env)
+├── docker-compose.yml       # Postgres, Redis, MongoDB, backend, frontend (all local)
+├── english_quotes/          # Source data (e.g. quotes.jsonl for seeding)
 └── .env.example
 ```
 
