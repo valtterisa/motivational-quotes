@@ -4,7 +4,7 @@ import cors from "@fastify/cors";
 import cookie from "@fastify/cookie";
 import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
-import { authRoutes } from "./modules/auth/routes";
+import { auth } from "./auth";
 import { apiKeysRoutes } from "./modules/api-keys/routes";
 import { quotesRoutes } from "./modules/quotes/routes";
 import { apiRateLimit, authRateLimit } from "./middleware/rate-limit";
@@ -71,13 +71,35 @@ export const createApp = () => {
     return reply.send({ ok: true });
   });
 
-  app.register(
-    async (instance) => {
-      instance.addHook("preHandler", authRateLimit);
-      instance.register(authRoutes);
+  const authBaseUrl = env.BETTER_AUTH_URL ?? `http://localhost:${env.PORT}`;
+  app.route({
+    method: ["GET", "POST"],
+    url: "/auth/*",
+    preHandler: authRateLimit,
+    async handler(request, reply) {
+      try {
+        const url = new URL(request.url, authBaseUrl);
+        const headers = new Headers();
+        Object.entries(request.headers).forEach(([key, value]) => {
+          if (value !== undefined) headers.append(key, Array.isArray(value) ? value.join(", ") : String(value));
+        });
+        const req = new Request(url.toString(), {
+          method: request.method,
+          headers,
+          ...(request.body && Object.keys(request.body as object).length > 0
+            ? { body: JSON.stringify(request.body) }
+            : {}),
+        });
+        const response = await auth.handler(req);
+        reply.status(response.status);
+        response.headers.forEach((value, key) => reply.header(key, value));
+        reply.send(response.body ? await response.text() : null);
+      } catch (error) {
+        app.log.error(error, "Authentication error");
+        reply.status(500).send({ error: "Internal authentication error", code: "AUTH_FAILURE" });
+      }
     },
-    { prefix: "/auth" },
-  );
+  });
 
   app.register(apiKeysRoutes, { prefix: "/dashboard/api-keys" });
 

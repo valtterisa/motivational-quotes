@@ -5,21 +5,20 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 
-export const users = pgTable("users", {
-  id: uuid("id").primaryKey().defaultRandom(),
+export const user = pgTable("user", {
+  id: text("id").primaryKey(),
+  name: text("name"),
   email: text("email").notNull().unique(),
-  passwordHash: text("password_hash").notNull(),
+  emailVerified: timestamp("emailVerified", { withTimezone: true }),
+  image: text("image"),
   role: text("role").notNull().default("user"),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .defaultNow()
-    .notNull(),
 });
 
 export const apiKeys = pgTable("api_keys", {
   id: uuid("id").primaryKey().defaultRandom(),
-  userId: uuid("user_id")
+  userId: text("user_id")
     .notNull()
-    .references(() => users.id),
+    .references(() => user.id),
   keyHash: text("key_hash").notNull(),
   label: text("label").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true })

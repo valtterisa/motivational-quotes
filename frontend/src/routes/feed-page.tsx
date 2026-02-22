@@ -6,6 +6,7 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { useAuth } from "@/state/use-auth";
+import { authClient } from "@/lib/auth-client";
 import { apiCall, queryKeys } from "@/lib/api";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -31,18 +32,17 @@ interface FeedResponse {
 const PAGE_SIZE = 20;
 
 export const FeedPage = () => {
-  const { user, clearAuth } = useAuth();
+  const { user } = useAuth();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const sentinelRef = useRef<HTMLDivElement>(null);
 
   const handleLogout = async () => {
     try {
-      await apiCall("/auth/logout", { method: "POST" });
+      await authClient.signOut();
     } catch (error) {
       console.error("Logout error:", error);
     } finally {
-      clearAuth();
       navigate("/");
     }
   };

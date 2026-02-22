@@ -6,16 +6,10 @@ vi.mock("../config/env", () => ({
     PORT: 3001,
     DATABASE_URL: "postgres://test",
     REDIS_URL: "redis://test",
-    JWT_SECRET: "test-secret",
+    BETTER_AUTH_SECRET: "test-secret",
+    BETTER_AUTH_URL: "http://localhost:3001",
     CORS_ORIGINS: ["http://localhost:5173"],
   }),
-}));
-
-vi.mock("../redis/client", () => ({
-  redisClient: {
-    get: vi.fn(),
-    set: vi.fn(),
-  },
 }));
 
 const { requireAdmin } = await import("./auth");

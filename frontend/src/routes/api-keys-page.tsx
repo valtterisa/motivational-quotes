@@ -33,6 +33,7 @@ export const ApiKeysPage = () => {
   const queryClient = useQueryClient();
   const [newLabel, setNewLabel] = useState("");
   const [createdKey, setCreatedKey] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: queryKeys.dashboard.apiKeys(),
@@ -68,8 +69,18 @@ export const ApiKeysPage = () => {
 
   const handleCreate = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user || !newLabel) return;
-    createKey.mutate(newLabel);
+    setFormError(null);
+    createKey.reset();
+    if (!user) {
+      setFormError("Please sign in to create an API key.");
+      return;
+    }
+    const label = newLabel.trim();
+    if (!label) {
+      setFormError("Enter a label for the key.");
+      return;
+    }
+    createKey.mutate(label);
   };
 
   const handleRevoke = (id: string) => {
@@ -100,6 +111,13 @@ export const ApiKeysPage = () => {
           <CardTitle className="text-lg">Create key</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
+          {(formError || createKey.isError) && (
+            <Alert variant="destructive">
+              <AlertDescription>
+                {formError ?? (createKey.error instanceof Error ? createKey.error.message : "Failed to create key")}
+              </AlertDescription>
+            </Alert>
+          )}
           {createdKey && (
             <Alert>
               <AlertDescription className="flex flex-wrap items-center gap-2">
@@ -122,18 +140,34 @@ export const ApiKeysPage = () => {
               </AlertDescription>
             </Alert>
           )}
-          <form onSubmit={handleCreate} className="flex gap-2 items-end">
+          <div className="flex gap-2 items-end">
             <div className="flex-1 space-y-2">
               <Label htmlFor="api-key-label">Label</Label>
               <Input
                 id="api-key-label"
                 value={newLabel}
-                onChange={(e) => setNewLabel(e.target.value)}
+                onChange={(e) => {
+                  setNewLabel(e.target.value);
+                  setFormError(null);
+                  createKey.reset();
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    handleCreate(e as unknown as React.FormEvent);
+                  }
+                }}
                 placeholder="e.g. Production"
               />
             </div>
-            <Button type="submit">Create API Key</Button>
-          </form>
+            <Button
+              type="button"
+              disabled={createKey.isPending}
+              onClick={() => handleCreate({ preventDefault: () => {} } as React.FormEvent)}
+            >
+              {createKey.isPending ? "Creating…" : "Create API Key"}
+            </Button>
+          </div>
         </CardContent>
       </Card>
       <Card className="border-0 shadow-sm">

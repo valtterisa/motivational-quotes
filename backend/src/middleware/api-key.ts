@@ -1,7 +1,7 @@
 import type { FastifyRequest, FastifyReply } from "fastify";
 import crypto from "node:crypto";
 import { db } from "../db/drizzle";
-import { apiKeys, users } from "../db/schema";
+import { apiKeys, user } from "../db/schema";
 import { eq, and, isNull } from "drizzle-orm";
 
 const hashKey = (key: string) =>
@@ -22,10 +22,10 @@ export const requireApiKey = async (
     .select({
       apiKeyId: apiKeys.id,
       userId: apiKeys.userId,
-      email: users.email,
+      email: user.email,
     })
     .from(apiKeys)
-    .innerJoin(users, eq(apiKeys.userId, users.id))
+    .innerJoin(user, eq(apiKeys.userId, user.id))
     .where(and(eq(apiKeys.keyHash, keyHash), isNull(apiKeys.revokedAt)))
     .limit(1);
 

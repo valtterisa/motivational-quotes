@@ -8,8 +8,6 @@ export interface User {
 
 interface AuthContextType {
   user: User | null;
-  setAuth: (user: User) => void;
-  clearAuth: () => void;
   isLoading: boolean;
 }
 

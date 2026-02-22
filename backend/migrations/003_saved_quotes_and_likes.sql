@@ -1,12 +1,12 @@
 CREATE TABLE IF NOT EXISTS saved_quotes (
-  user_id UUID NOT NULL REFERENCES users(id),
+  user_id TEXT NOT NULL REFERENCES "user"(id),
   quote_id UUID NOT NULL REFERENCES quotes(id),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   PRIMARY KEY (user_id, quote_id)
 );
 
 CREATE TABLE IF NOT EXISTS quote_likes (
-  user_id UUID NOT NULL REFERENCES users(id),
+  user_id TEXT NOT NULL REFERENCES "user"(id),
   quote_id UUID NOT NULL REFERENCES quotes(id),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   PRIMARY KEY (user_id, quote_id)

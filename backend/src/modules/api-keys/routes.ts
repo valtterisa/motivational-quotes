@@ -3,7 +3,6 @@ import { z } from "zod";
 import { db } from "../../db/drizzle";
 import { apiKeys } from "../../db/schema";
 import { requireAuth } from "../../middleware/auth";
-import { requireCsrf } from "../../middleware/csrf";
 import { generateApiKey } from "../../middleware/api-key";
 import { and, eq } from "drizzle-orm";
 
@@ -55,7 +54,7 @@ export async function apiKeysRoutes(
   });
 
   fastify.post("/", {
-    preHandler: [requireAuth, requireCsrf],
+    preHandler: [requireAuth],
     schema: {
       tags: ["API Keys"],
       body: { type: "object", required: ["label"], properties: { label: { type: "string", minLength: 1 } } },
@@ -106,7 +105,7 @@ export async function apiKeysRoutes(
   fastify.post(
     "/:id/revoke",
     {
-      preHandler: [requireAuth, requireCsrf],
+      preHandler: [requireAuth],
       schema: {
         tags: ["API Keys"],
         params: { type: "object", required: ["id"], properties: { id: { type: "string" } } },

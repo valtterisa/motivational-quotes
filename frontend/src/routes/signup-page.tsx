@@ -1,9 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { useMutation } from "@tanstack/react-query";
-import { useAuth } from "@/state/use-auth";
-import type { User } from "@/state/auth-context";
-import { apiCall, getCsrfToken } from "@/lib/api";
+import { authClient } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -18,32 +15,31 @@ import {
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 export const SignupPage = () => {
-  const { setAuth } = useAuth();
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
 
-  const signup = useMutation({
-    mutationFn: (body: { email: string; password: string }) =>
-      apiCall<{ user: User; token?: string }>(
-        "/auth/signup",
-        { method: "POST", body: JSON.stringify(body) },
-      ),
-    onSuccess: async (data) => {
-      setAuth(data.user);
-      await getCsrfToken();
-      navigate("/dashboard");
-    },
-  });
-
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    signup.mutate({ email, password });
+    setError(null);
+    setPending(true);
+    const { data, error: err } = await authClient.signUp.email({
+      email,
+      password,
+      name: email.split("@")[0],
+      callbackURL: "/dashboard",
+    });
+    setPending(false);
+    if (err) {
+      setError(err.message ?? "Signup failed");
+      return;
+    }
+    if (data) {
+      navigate("/dashboard");
+    }
   };
-
-  const error = signup.isError
-    ? signup.error instanceof Error ? signup.error.message : "Signup failed"
-    : null;
 
   return (
     <div className="min-h-svh flex items-center justify-center bg-muted/40 p-4">
@@ -82,8 +78,8 @@ export const SignupPage = () => {
             </div>
           </CardContent>
           <CardFooter className="flex flex-col gap-4">
-            <Button type="submit" className="w-full" disabled={signup.isPending}>
-              {signup.isPending ? "Creating account..." : "Create account"}
+            <Button type="submit" className="w-full" disabled={pending}>
+              {pending ? "Creating account..." : "Create account"}
             </Button>
             <p className="text-sm text-muted-foreground">
               Already have an account?{" "}

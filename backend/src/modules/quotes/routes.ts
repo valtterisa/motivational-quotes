@@ -2,7 +2,6 @@ import type { FastifyInstance, FastifyPluginOptions } from "fastify";
 import { z } from "zod";
 import { redisClient } from "../../redis/client";
 import { requireAuth, optionalAuth } from "../../middleware/auth";
-import { requireCsrf } from "../../middleware/csrf";
 import * as content from "../../store/content";
 
 const REDIS_LIKE_COUNT_PREFIX = "like_count:";
@@ -128,7 +127,7 @@ export async function quotesRoutes(
   });
 
   fastify.post("/feed/saved/:quoteId", {
-    preHandler: [requireAuth, requireCsrf],
+    preHandler: [requireAuth],
     schema: {
       tags: ["Feed"],
       params: { type: "object", required: ["quoteId"], properties: { quoteId: { type: "string", format: "uuid" } } },
@@ -163,7 +162,7 @@ export async function quotesRoutes(
   });
 
   fastify.delete("/feed/saved/:quoteId", {
-    preHandler: [requireAuth, requireCsrf],
+    preHandler: [requireAuth],
     schema: {
       tags: ["Feed"],
       params: { type: "object", required: ["quoteId"], properties: { quoteId: { type: "string", format: "uuid" } } },
@@ -196,7 +195,7 @@ export async function quotesRoutes(
   });
 
   fastify.post("/feed/likes/:quoteId", {
-    preHandler: [requireAuth, requireCsrf],
+    preHandler: [requireAuth],
     schema: {
       tags: ["Feed"],
       params: { type: "object", required: ["quoteId"], properties: { quoteId: { type: "string", format: "uuid" } } },
@@ -235,7 +234,7 @@ export async function quotesRoutes(
   });
 
   fastify.delete("/feed/likes/:quoteId", {
-    preHandler: [requireAuth, requireCsrf],
+    preHandler: [requireAuth],
     schema: {
       tags: ["Feed"],
       params: { type: "object", required: ["quoteId"], properties: { quoteId: { type: "string", format: "uuid" } } },
@@ -376,7 +375,7 @@ export async function quotesRoutes(
   fastify.post(
     "/dashboard/quotes",
     {
-      preHandler: [requireAuth, requireCsrf],
+      preHandler: [requireAuth],
       schema: {
         tags: ["Dashboard"],
         body: {
@@ -413,7 +412,7 @@ export async function quotesRoutes(
   fastify.put(
     "/dashboard/quotes/:id",
     {
-      preHandler: [requireAuth, requireCsrf],
+      preHandler: [requireAuth],
       schema: {
         tags: ["Dashboard"],
         params: { type: "object", required: ["id"], properties: { id: { type: "string" } } },
@@ -459,7 +458,7 @@ export async function quotesRoutes(
   fastify.delete(
     "/dashboard/quotes/:id",
     {
-      preHandler: [requireAuth, requireCsrf],
+      preHandler: [requireAuth],
       schema: {
         tags: ["Dashboard"],
         params: { type: "object", required: ["id"], properties: { id: { type: "string" } } },

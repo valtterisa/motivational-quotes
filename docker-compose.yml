@@ -64,7 +64,8 @@ services:
       DATABASE_URL: postgres://${POSTGRES_USER:-app}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-quotes}
       REDIS_URL: redis://redis:6379
       MONGODB_URI: mongodb://mongodb:27017/content
-      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?Set BETTER_AUTH_SECRET in .env}
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:3001}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://localhost:3000}
     ports:
       - "${BACKEND_PORT:-3001}:${BACKEND_PORT:-3001}"

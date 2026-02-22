@@ -3,7 +3,8 @@ export interface Env {
   DATABASE_URL: string;
   DB_POOL_MAX?: number;
   REDIS_URL: string;
-  JWT_SECRET?: string;
+  BETTER_AUTH_SECRET?: string;
+  BETTER_AUTH_URL?: string;
   CORS_ORIGINS: string[];
   MONGODB_URI: string;
   PUBLIC_API_PORT?: number;
@@ -20,7 +21,8 @@ export const loadEnv = (): Env => {
     DATABASE_URL,
     DB_POOL_MAX,
     REDIS_URL = "redis://localhost:6379",
-    JWT_SECRET,
+    BETTER_AUTH_SECRET,
+    BETTER_AUTH_URL,
     CORS_ORIGINS = "http://localhost:5173,http://localhost:3000,http://127.0.0.1:5173,http://127.0.0.1:3000",
     MONGODB_URI,
     PUBLIC_API_PORT = "3002",
@@ -43,17 +45,19 @@ export const loadEnv = (): Env => {
     DATABASE_URL,
     DB_POOL_MAX: DB_POOL_MAX != null ? Number(DB_POOL_MAX) : undefined,
     REDIS_URL,
-    JWT_SECRET,
+    BETTER_AUTH_SECRET,
+    BETTER_AUTH_URL,
     CORS_ORIGINS: CORS_ORIGINS.split(",")
       .map((o) => o.trim())
       .filter((o) => o.length > 0),
     MONGODB_URI,
-    PUBLIC_API_PORT: PUBLIC_API_PORT != null ? Number(PUBLIC_API_PORT) : undefined,
+    PUBLIC_API_PORT:
+      PUBLIC_API_PORT != null ? Number(PUBLIC_API_PORT) : undefined,
     PUBLIC_REDIS_URL: PUBLIC_REDIS_URL ?? undefined,
-    PUBLIC_DB_POOL_MAX: PUBLIC_DB_POOL_MAX != null ? Number(PUBLIC_DB_POOL_MAX) : undefined,
+    PUBLIC_DB_POOL_MAX:
+      PUBLIC_DB_POOL_MAX != null ? Number(PUBLIC_DB_POOL_MAX) : undefined,
     DATABASE_URL_PUBLIC: DATABASE_URL_PUBLIC ?? undefined,
     MONGODB_URI_PUBLIC: MONGODB_URI_PUBLIC ?? undefined,
     PUBLIC_API_BASE_URL: PUBLIC_API_BASE_URL ?? undefined,
   };
 };
-

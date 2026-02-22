@@ -4,7 +4,7 @@ API and web app for motivational quotes: auth, feed, dashboard (my quotes, liked
 
 ## Features
 
-- **Auth**: Email/password signup and login (JWT in HTTP-only cookie or Bearer header)
+- **Auth**: Email/password signup and login via [Better Auth](https://www.better-auth.com/) (session in HTTP-only cookie)
 - **RBAC**: Admin and user roles
 - **API keys**: Create and revoke from the dashboard; use in the public API
 - **Feed**: Browse quotes, like and save (optional auth). Sort by newest (cursor) or popular (offset)
@@ -16,7 +16,7 @@ API and web app for motivational quotes: auth, feed, dashboard (my quotes, liked
 
 ## Tech stack
 
-- **Backend**: Fastify, TypeScript, Drizzle (Postgres for users + API keys), MongoDB for quotes/likes/saves, Redis (cache, rate limit, JWT blacklist)
+- **Backend**: Fastify, TypeScript, Better Auth (Postgres for users + sessions), Drizzle (Postgres for API keys), MongoDB for quotes/likes/saves, Redis (cache, rate limit)
 - **Frontend**: React, Vite, React Router, TypeScript
 - **Local stack**: Postgres, Redis, and MongoDB run as Docker Compose services; no external DBs required.
 
@@ -43,7 +43,7 @@ pnpm install
 cp .env.example .env
 ```
 
-Set at least: `POSTGRES_PASSWORD`, `JWT_SECRET`. Optionally `POSTGRES_USER`, `POSTGRES_DB`, `CORS_ORIGINS`, `VITE_API_BASE_URL`. See `.env.example`.
+Set at least: `POSTGRES_PASSWORD`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`. Optionally `POSTGRES_USER`, `POSTGRES_DB`, `CORS_ORIGINS`, `VITE_API_BASE_URL`. See `.env.example`.
 
 3. Run everything locally (Postgres, Redis, MongoDB, backend, frontend):
 
@@ -51,7 +51,7 @@ Set at least: `POSTGRES_PASSWORD`, `JWT_SECRET`. Optionally `POSTGRES_USER`, `PO
 docker compose up --build
 ```
 
-Backend runs migrations on startup, then seeds the DB from `english_quotes/quotes.jsonl` if the quotes collection is empty (first-time spin-up). If `quotes.jsonl` is in Git LFS, run `git lfs pull` before `docker compose build` so the image gets the real file. First start may take a moment for Postgres to become ready; if the backend exits once, run `docker compose up` again.
+On first start, the backend container runs **Better Auth migrations** (`pnpm run auth:migrate`) to create auth tables (`user`, `session`, `account`, `verification`), then app migrations, then seeds the DB from `english_quotes/quotes.jsonl` if the quotes collection is empty. If `quotes.jsonl` is in Git LFS, run `git lfs pull` before `docker compose build`. First start may take a moment for Postgres to become ready; if the backend exits once, run `docker compose up` again.
 
 - Frontend: http://localhost:3000 (or `FRONTEND_PORT`)
 - Backend: http://localhost:3001 (or `BACKEND_PORT`)
@@ -85,6 +85,26 @@ cd frontend && pnpm dev
 
 To seed manually (e.g. when not using Docker): run `pnpm seed` from repo root or `pnpm seed` in the backend directory. Requires MongoDB running and `.env` with `DATABASE_URL`, `MONGODB_URI`, etc.
 
+### Better Auth CLI (schema and migrations)
+
+Auth tables are created by the [Better Auth CLI](https://www.better-auth.com/docs/concepts/cli), not by the SQL files in `backend/migrations/`. Use these commands from the **backend** directory:
+
+| Command | Description |
+|--------|-------------|
+| `pnpm run auth:migrate` | Create or update auth tables (`user`, `session`, `account`, `verification`). **Run before first app start** when not using Docker. |
+| `pnpm run auth:generate` | Generate schema (e.g. SQL or Drizzle) for reference; does not apply changes. |
+
+**With Docker:** the backend container runs `auth:migrate` automatically on every start, so auth tables are created or updated without running the command yourself.
+
+**Without Docker:** run once before starting the backend:
+
+```bash
+cd backend
+pnpm run auth:migrate
+```
+
+Requires `DATABASE_URL`, `BETTER_AUTH_SECRET`, and `BETTER_AUTH_URL` in `.env`.
+
 ## API overview
 
 Base URL for API: `http://localhost:3001` (or your backend URL).
@@ -92,14 +112,14 @@ Base URL for API: `http://localhost:3001` (or your backend URL).
 | Area       | Auth       | Paths                                                                                                        |
 | ---------- | ---------- | ------------------------------------------------------------------------------------------------------------ |
 | Health     | —          | `GET /health`                                                                                                |
-| Auth       | —          | `POST /auth/signup`, `POST /auth/login`, `GET /auth/me`, `POST /auth/logout`                                 |
-| API keys   | Cookie/JWT | `GET /dashboard/api-keys`, `POST /dashboard/api-keys`, `POST /dashboard/api-keys/:id/revoke`                 |
+| Auth       | —          | Better Auth at `/auth/*`: sign-up, sign-in, get-session, sign-out (session cookie)                           |
+| API keys   | Session    | `GET /dashboard/api-keys`, `POST /dashboard/api-keys`, `POST /dashboard/api-keys/:id/revoke`                 |
 | Feed       | Optional   | `GET /api/v1/feed`, `POST/DELETE /api/v1/feed/likes/:quoteId`, `POST/DELETE /api/v1/feed/saved/:quoteId`     |
-| Dashboard  | Cookie/JWT | `GET/POST/PUT/DELETE /api/v1/dashboard/quotes`, `GET /api/v1/dashboard/liked`, `GET /api/v1/dashboard/saved` |
+| Dashboard  | Session    | `GET/POST/PUT/DELETE /api/v1/dashboard/quotes`, `GET /api/v1/dashboard/liked`, `GET /api/v1/dashboard/saved` |
 | Public API | X-API-Key  | `GET /api/v1/quotes/random`, `GET /api/v1/quotes?author=&cursor=&limit=`                                     |
 
 - **Public API** (API key): read-only; for embedding on your site.
-- **Feed / dashboard**: cookie (or Bearer) auth; feed is browsable without auth, with optional like/save when logged in.
+- **Feed / dashboard**: session cookie; feed is browsable without auth, with optional like/save when logged in.
 
 Full OpenAPI spec and Swagger UI: `GET /docs` on the backend.
 
@@ -113,9 +133,8 @@ Response headers: `X-RateLimit-Limit`, `X-RateLimit-Remaining`. On exceed: `429`
 ## Security
 
 - CORS allowlist (`CORS_ORIGINS`)
-- bcrypt (12 rounds) for passwords
+- Better Auth (session cookie, configurable trusted origins; password hashing handled by Better Auth)
 - API keys stored hashed (SHA-256)
-- JWT blacklist in Redis
 - @fastify/helmet
 - Rate limiting
 
@@ -131,7 +150,7 @@ cd frontend && pnpm test
 ```
 motivational-quotes/
 ├── backend/                 # API – Dockerfile
-│   ├── src/                 # app, config, db (Drizzle), redis, middleware, modules, store (MongoDB)
+│   ├── src/                 # app, auth (Better Auth), config, db (Drizzle), redis, middleware, modules, store (MongoDB)
 │   ├── migrations/          # Postgres migrations
 │   └── Dockerfile
 ├── frontend/                # Web app – Dockerfile

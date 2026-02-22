@@ -1,16 +1,26 @@
+import { getMigrations } from "better-auth/db";
 import { createApp } from "./app";
+import { authConfig } from "./auth";
 import { loadEnv } from "./config/env";
 import { runMigrations } from "./db/migrate";
 import { redisClient } from "./redis/client";
 import { runSeedIfEmpty } from "./seed";
 
 const env = loadEnv();
-if (!env.JWT_SECRET) {
-  throw new Error("JWT_SECRET is required for internal backend");
+if (!env.BETTER_AUTH_SECRET) {
+  throw new Error("BETTER_AUTH_SECRET is required for internal backend");
 }
 const app = createApp();
 
 const startServer = async () => {
+  try {
+    const { runMigrations: runAuthMigrations } = await getMigrations(authConfig);
+    await runAuthMigrations();
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error("Better Auth migrations failed:", err);
+    process.exit(1);
+  }
   try {
     await runMigrations();
   } catch (err) {

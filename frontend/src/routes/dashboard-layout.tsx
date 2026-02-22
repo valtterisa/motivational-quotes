@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "@/state/use-auth";
-import { apiCall, getCsrfToken } from "@/lib/api";
+import { authClient } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import {
   Menu,
@@ -26,18 +26,16 @@ const navItems = [
 ] as const;
 
 export const DashboardLayout = () => {
-  const { user, clearAuth } = useAuth();
+  const { user } = useAuth();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const handleLogout = async () => {
     try {
-      await getCsrfToken();
-      await apiCall("/auth/logout", { method: "POST" });
+      await authClient.signOut();
     } catch (error) {
       console.error("Logout error:", error);
     } finally {
-      clearAuth();
       navigate("/");
     }
   };
