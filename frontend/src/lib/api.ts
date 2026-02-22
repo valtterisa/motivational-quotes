@@ -55,5 +55,8 @@ export const queryKeys = {
     liked: () => ["dashboard", "liked"] as const,
     saved: () => ["dashboard", "saved"] as const,
   },
+  admin: {
+    stats: () => ["admin", "stats"] as const,
+  },
   feed: (sort?: string) => ["feed", sort ?? "newest"] as const,
 } as const;

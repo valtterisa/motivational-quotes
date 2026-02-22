@@ -13,6 +13,7 @@ import {
   Key,
   FileText,
   LogOut,
+  ShieldCheck,
 } from "lucide-react";
 
 const navItems = [
@@ -24,6 +25,8 @@ const navItems = [
   { to: "/dashboard/api-keys", label: "API Keys", icon: Key },
   { to: "/dashboard/docs", label: "API Docs", icon: FileText },
 ] as const;
+
+const adminNavItem = { to: "/dashboard/admin", label: "Admin", icon: ShieldCheck } as const;
 
 export const DashboardLayout = () => {
   const { user } = useAuth();
@@ -40,6 +43,7 @@ export const DashboardLayout = () => {
     }
   };
 
+  const isAdmin = user?.role === "admin";
   const nav = (
     <nav className="flex flex-col gap-0.5 flex-1">
       {navItems.map(({ to, label, icon: Icon }) => (
@@ -55,6 +59,21 @@ export const DashboardLayout = () => {
           </Link>
         </Button>
       ))}
+      {isAdmin && (() => {
+        const Icon = adminNavItem.icon;
+        return (
+          <Button
+            variant="ghost"
+            asChild
+            className="justify-start min-h-[44px] gap-3 px-3 rounded-lg text-foreground/90 hover:text-foreground hover:bg-sidebar-accent"
+          >
+            <Link to={adminNavItem.to} onClick={() => setSidebarOpen(false)}>
+              <Icon className="size-5 shrink-0 opacity-80" />
+              {adminNavItem.label}
+            </Link>
+          </Button>
+        );
+      })()}
     </nav>
   );
 

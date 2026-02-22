@@ -1,10 +1,16 @@
+import { config } from "dotenv";
+import { join } from "path";
 import { getMigrations } from "better-auth/db";
 import { createApp } from "./app";
 import { authConfig } from "./auth";
 import { loadEnv } from "./config/env";
+import { ensureAdminByEmail } from "./db/ensure-admin";
 import { runMigrations } from "./db/migrate";
 import { redisClient } from "./redis/client";
 import { runSeedIfEmpty } from "./seed";
+
+config({ path: join(process.cwd(), ".env") });
+config({ path: join(process.cwd(), "..", ".env") });
 
 const env = loadEnv();
 if (!env.BETTER_AUTH_SECRET) {
@@ -34,6 +40,20 @@ const startServer = async () => {
   } catch (err) {
     // eslint-disable-next-line no-console
     console.error("Seed failed (continuing):", err);
+  }
+
+  if (env.ADMIN_EMAIL?.trim()) {
+    try {
+      // eslint-disable-next-line no-console
+      console.log("[ensure-admin] Running for ADMIN_EMAIL:", env.ADMIN_EMAIL.trim());
+      await ensureAdminByEmail(env.ADMIN_EMAIL.trim());
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error("Ensure admin failed (continuing):", err);
+    }
+  } else {
+    // eslint-disable-next-line no-console
+    console.log("[ensure-admin] Skipped: ADMIN_EMAIL not set in .env");
   }
 
   try {

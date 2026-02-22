@@ -217,6 +217,22 @@ export async function getDashboardQuotes(createdBy: string): Promise<QuoteDoc[]>
   return rows.map((r) => toQuoteDoc(r as Record<string, unknown>));
 }
 
+export async function getQuoteCountByUserId(): Promise<Record<string, number>> {
+  const db = await getContentDb();
+  const rows = await db
+    .collection(QUOTES)
+    .aggregate<{ _id: string | null; count: number }>([
+      { $match: { createdBy: { $exists: true, $ne: null } } },
+      { $group: { _id: "$createdBy", count: { $sum: 1 } } },
+    ])
+    .toArray();
+  const out: Record<string, number> = {};
+  for (const r of rows) {
+    if (r._id != null) out[r._id] = r.count;
+  }
+  return out;
+}
+
 export async function hasLiked(userId: string, quoteIds: string[]): Promise<Set<string>> {
   if (quoteIds.length === 0) return new Set();
   const db = await getContentDb();

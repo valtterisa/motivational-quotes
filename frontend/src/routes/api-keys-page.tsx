@@ -5,12 +5,7 @@ import { apiCall, queryKeys } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
   TableBody,
@@ -31,27 +26,32 @@ interface ApiKey {
 export const ApiKeysPage = () => {
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const isAdmin = user?.role === "admin";
   const [newLabel, setNewLabel] = useState("");
   const [createdKey, setCreatedKey] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: queryKeys.dashboard.apiKeys(),
-    queryFn: () =>
-      apiCall<{ keys: ApiKey[] }>("/dashboard/api-keys"),
+    queryFn: () => apiCall<{ keys: ApiKey[] }>("/dashboard/api-keys"),
     enabled: !!user,
   });
 
   const createKey = useMutation({
     mutationFn: (label: string) =>
-      apiCall<{ key: { id: string; label: string; createdAt: string }; token: string }>("/dashboard/api-keys", {
+      apiCall<{
+        key: { id: string; label: string; createdAt: string };
+        token: string;
+      }>("/dashboard/api-keys", {
         method: "POST",
         body: JSON.stringify({ label }),
       }),
     onSuccess: (data) => {
       setCreatedKey(data.token);
       setNewLabel("");
-      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.apiKeys() });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.dashboard.apiKeys(),
+      });
     },
   });
 
@@ -61,7 +61,9 @@ export const ApiKeysPage = () => {
         method: "POST",
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.apiKeys() });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.dashboard.apiKeys(),
+      });
     },
   });
 
@@ -114,7 +116,10 @@ export const ApiKeysPage = () => {
           {(formError || createKey.isError) && (
             <Alert variant="destructive">
               <AlertDescription>
-                {formError ?? (createKey.error instanceof Error ? createKey.error.message : "Failed to create key")}
+                {formError ??
+                  (createKey.error instanceof Error
+                    ? createKey.error.message
+                    : "Failed to create key")}
               </AlertDescription>
             </Alert>
           )}
@@ -133,7 +138,11 @@ export const ApiKeysPage = () => {
                   >
                     Copy
                   </Button>
-                  <Button size="sm" variant="outline" onClick={() => setCreatedKey(null)}>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setCreatedKey(null)}
+                  >
                     Close
                   </Button>
                 </div>
@@ -163,7 +172,9 @@ export const ApiKeysPage = () => {
             <Button
               type="button"
               disabled={createKey.isPending}
-              onClick={() => handleCreate({ preventDefault: () => {} } as React.FormEvent)}
+              onClick={() =>
+                handleCreate({ preventDefault: () => {} } as React.FormEvent)
+              }
             >
               {createKey.isPending ? "Creating…" : "Create API Key"}
             </Button>
@@ -188,10 +199,12 @@ export const ApiKeysPage = () => {
               {keys.map((k) => (
                 <TableRow key={k.id}>
                   <TableCell>{k.label}</TableCell>
-                  <TableCell>{new Date(k.createdAt).toLocaleDateString()}</TableCell>
+                  <TableCell>
+                    {new Date(k.createdAt).toLocaleDateString()}
+                  </TableCell>
                   <TableCell>{k.revokedAt ? "Revoked" : "Active"}</TableCell>
                   <TableCell>
-                    {!k.revokedAt && (
+                    {!k.revokedAt && isAdmin && (
                       <Button
                         size="sm"
                         variant="destructive"

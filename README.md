@@ -122,6 +122,33 @@ If you run the backend **without Docker**, ensure Postgres is up and `DATABASE_U
 | `pnpm run auth:generate` | Generate Better Auth schema (e.g. SQL) for reference; does not apply. |
 | `pnpm run auth:migrate` | CLI migrate (optional; backend already runs auth migrations on startup). |
 
+### Admin access
+
+To get **admin** access (Admin dashboard, create/revoke API keys, user management), give yourself the admin role. New signups get the `user` role by default.
+
+**Easiest: use `ADMIN_EMAIL` (no script)**
+
+1. In `.env`, set:
+   ```bash
+   ADMIN_EMAIL=your@email.com
+   ```
+2. Sign up with that email in the app (if you haven’t already).
+3. Start or restart the backend. If there is no admin yet, that user is promoted to admin automatically. You’ll see a log line like: `[ensure-admin] Promoted your@email.com to admin (no admin existed).`
+
+This runs on every backend start but only promotes when there are **zero** admins, so it’s safe to leave `ADMIN_EMAIL` set.
+
+**Optional: script for another admin later**
+
+To promote a different user when an admin already exists (or without restarting), from `backend/` run:
+```bash
+pnpm run assign-admin
+```
+Default email is **savonen.emppu@gmail.com**. Override with `ADMIN_EMAIL=other@example.com` in `.env` or:
+```bash
+ADMIN_EMAIL=other@example.com pnpm run assign-admin
+```
+The user must exist (sign up first) or the script will exit with a message.
+
 ---
 
 ## API overview

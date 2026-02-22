@@ -2,7 +2,7 @@ import type { FastifyInstance, FastifyPluginOptions } from "fastify";
 import { z } from "zod";
 import { db } from "../../db/drizzle";
 import { apiKeys } from "../../db/schema";
-import { requireAuth } from "../../middleware/auth";
+import { requireAuth, requireAdmin } from "../../middleware/auth";
 import { generateApiKey } from "../../middleware/api-key";
 import { and, eq } from "drizzle-orm";
 
@@ -54,7 +54,7 @@ export async function apiKeysRoutes(
   });
 
   fastify.post("/", {
-    preHandler: [requireAuth],
+    preHandler: [requireAuth, requireAdmin],
     schema: {
       tags: ["API Keys"],
       body: { type: "object", required: ["label"], properties: { label: { type: "string", minLength: 1 } } },
@@ -68,6 +68,7 @@ export async function apiKeysRoutes(
         },
         400: { type: "object", properties: { error: { type: "string" } } },
         401: { type: "object", properties: { error: { type: "string" } } },
+        403: { type: "object", properties: { error: { type: "string" } } },
       },
     },
   }, async (request, reply) => {
@@ -105,7 +106,7 @@ export async function apiKeysRoutes(
   fastify.post(
     "/:id/revoke",
     {
-      preHandler: [requireAuth],
+      preHandler: [requireAuth, requireAdmin],
       schema: {
         tags: ["API Keys"],
         params: { type: "object", required: ["id"], properties: { id: { type: "string" } } },
@@ -113,6 +114,7 @@ export async function apiKeysRoutes(
           200: { type: "object", properties: { success: { type: "boolean" } } },
           400: { type: "object", properties: { error: { type: "string" } } },
           401: { type: "object", properties: { error: { type: "string" } } },
+          403: { type: "object", properties: { error: { type: "string" } } },
           404: { type: "object", properties: { error: { type: "string" } } },
         },
       },

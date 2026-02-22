@@ -5,6 +5,7 @@ import cookie from "@fastify/cookie";
 import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
 import { auth } from "./auth";
+import { adminRoutes } from "./modules/admin/routes";
 import { apiKeysRoutes } from "./modules/api-keys/routes";
 import { quotesRoutes } from "./modules/quotes/routes";
 import { apiRateLimit, authRateLimit } from "./middleware/rate-limit";
@@ -106,6 +107,7 @@ export const createApp = () => {
   app.register(
     async (instance) => {
       instance.addHook("preHandler", apiRateLimit);
+      instance.register(adminRoutes);
       instance.register(quotesRoutes);
     },
     { prefix: "/api/v1" },

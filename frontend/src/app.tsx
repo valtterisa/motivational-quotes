@@ -11,6 +11,7 @@ import { LikedPage } from "@/routes/liked-page";
 import { SavedPage } from "@/routes/saved-page";
 import { ApiKeysPage } from "@/routes/api-keys-page";
 import { ApiDocsPage } from "@/routes/api-docs-page";
+import { AdminPage } from "@/routes/admin-page";
 import { FeedPage } from "@/routes/feed-page";
 
 const queryClient = new QueryClient();
@@ -30,6 +31,7 @@ const App = () => {
             <Route path="liked" element={<LikedPage />} />
             <Route path="saved" element={<SavedPage />} />
             <Route path="api-keys" element={<ApiKeysPage />} />
+            <Route path="admin" element={<AdminPage />} />
             <Route path="docs" element={<ApiDocsPage />} />
           </Route>
         </Routes>
