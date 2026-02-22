@@ -23,6 +23,9 @@ COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/migrations ./migrations
 COPY english_quotes ./english_quotes
 
+RUN chown -R node:node /app
+USER node
+
 EXPOSE 3001
 
 CMD ["pnpm", "start"]

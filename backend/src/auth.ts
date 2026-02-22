@@ -3,6 +3,9 @@ import { Pool } from "pg";
 import { loadEnv } from "./config/env";
 
 const env = loadEnv();
+if (!env.BETTER_AUTH_SECRET || env.BETTER_AUTH_SECRET.length < 32) {
+  throw new Error("BETTER_AUTH_SECRET is required and must be at least 32 characters");
+}
 
 const authConfig = {
   basePath: "/auth",

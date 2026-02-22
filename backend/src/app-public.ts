@@ -4,7 +4,7 @@ import cors from "@fastify/cors";
 import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
 import { quotesRoutesPublic } from "./modules/quotes/routes-public";
-import { createRateLimiterWithClient } from "./middleware/rate-limit";
+import { createRateLimiterWithClient, hashApiKeyForRateLimit } from "./middleware/rate-limit";
 import { redisClientPublic } from "./redis/client-public";
 import { errorHandler } from "./middleware/error";
 import { loadEnv } from "./config/env";
@@ -13,7 +13,7 @@ export const createPublicApp = () => {
   const env = loadEnv();
   const app = Fastify({
     logger: false,
-    trustProxy: true,
+    trustProxy: env.TRUST_PROXY,
     bodyLimit: 1024 * 1024,
   });
 
@@ -35,7 +35,7 @@ export const createPublicApp = () => {
 
   app.register(helmet);
   app.register(cors, {
-    origin: env.CORS_ORIGINS.length ? env.CORS_ORIGINS : true,
+    origin: env.CORS_ORIGINS.length ? env.CORS_ORIGINS : [],
     credentials: false,
     methods: ["GET", "OPTIONS"],
     allowedHeaders: ["Content-Type", "X-API-Key"],
@@ -87,7 +87,10 @@ export const createPublicApp = () => {
     100,
     (request) => {
       const apiKey = request.headers["x-api-key"];
-      return apiKey ? `apikey:${apiKey}` : `ip:${request.ip}`;
+      if (apiKey && typeof apiKey === "string") {
+        return `apikey:${hashApiKeyForRateLimit(apiKey)}`;
+      }
+      return `ip:${request.ip}`;
     },
   );
 

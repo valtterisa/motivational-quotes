@@ -7,6 +7,7 @@ import * as content from "../../store/content";
 const REDIS_LIKE_COUNT_PREFIX = "like_count:";
 const REDIS_USER_LIKES_PREFIX = "user_likes:";
 const REDIS_USER_SAVES_PREFIX = "user_saves:";
+const MAX_FEED_OFFSET = 10_000;
 
 const createQuoteSchema = z.object({
   text: z.string().min(1).max(10_000),
@@ -28,7 +29,7 @@ const feedQuerySchema = z.object({
   offset: z
     .union([z.string(), z.number()])
     .transform((v) => (typeof v === "string" ? Number(v) : v))
-    .refine((n) => Number.isInteger(n) && n >= 0)
+    .refine((n) => Number.isInteger(n) && n >= 0 && n <= MAX_FEED_OFFSET)
     .optional(),
 });
 
@@ -99,7 +100,7 @@ export async function quotesRoutes(
     let nextOffset: number | null = null;
 
     if (sort === "popular") {
-      const off = offset ?? 0;
+      const off = Math.min(offset ?? 0, MAX_FEED_OFFSET);
       const result = await content.getFeedPopular({ offset: off, limit: pageSize });
       rows = result.items;
       nextOffset = result.nextOffset;

@@ -13,7 +13,7 @@ import { loadEnv } from "./config/env";
 
 export const createApp = () => {
   const env = loadEnv();
-  const app = Fastify({ logger: false, trustProxy: true, bodyLimit: 1024 * 1024 });
+  const app = Fastify({ logger: false, trustProxy: env.TRUST_PROXY, bodyLimit: 1024 * 1024 });
 
   app.addContentTypeParser("application/json", { parseAs: "string" }, (req, body, done) => {
     try {

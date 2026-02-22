@@ -1,7 +1,16 @@
 import type { FastifyRequest, FastifyReply } from "fastify";
+import crypto from "node:crypto";
 import { redisClient } from "../redis/client";
 
-type RedisLike = { isOpen: boolean; incr(key: string): Promise<number>; expire(key: string, s: number): Promise<boolean>; ttl(key: string): Promise<number> };
+type RedisLike = {
+  isOpen: boolean;
+  incr(key: string): Promise<number>;
+  expire(key: string, s: number): Promise<boolean>;
+  ttl(key: string): Promise<number>;
+};
+
+export const hashApiKeyForRateLimit = (key: string): string =>
+  crypto.createHash("sha256").update(key).digest("hex");
 
 export function createRateLimiterWithClient(
   client: RedisLike,
@@ -44,14 +53,18 @@ export const createRateLimiter = (
   windowMs: number,
   maxRequests: number,
   keyGenerator: (request: FastifyRequest) => string,
-) => createRateLimiterWithClient(redisClient, windowMs, maxRequests, keyGenerator);
+) =>
+  createRateLimiterWithClient(redisClient, windowMs, maxRequests, keyGenerator);
 
 export const apiRateLimit = createRateLimiter(
   15 * 60 * 1000,
   100,
   (request) => {
     const apiKey = request.headers["x-api-key"];
-    return apiKey ? `apikey:${apiKey}` : `ip:${request.ip}`;
+    if (apiKey && typeof apiKey === "string") {
+      return `apikey:${hashApiKeyForRateLimit(apiKey)}`;
+    }
+    return `ip:${request.ip}`;
   },
 );
 
@@ -64,6 +77,6 @@ export const authRateLimit = createRateLimiter(
     if (email && typeof email === "string") {
       return `email:${email.toLowerCase().trim()}`;
     }
-    return "";
+    return `ip:${request.ip}:auth`;
   },
 );

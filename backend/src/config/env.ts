@@ -13,6 +13,7 @@ export interface Env {
   DATABASE_URL_PUBLIC?: string;
   MONGODB_URI_PUBLIC?: string;
   PUBLIC_API_BASE_URL?: string;
+  TRUST_PROXY: boolean;
 }
 
 export const loadEnv = (): Env => {
@@ -31,6 +32,7 @@ export const loadEnv = (): Env => {
     DATABASE_URL_PUBLIC,
     MONGODB_URI_PUBLIC,
     PUBLIC_API_BASE_URL,
+    TRUST_PROXY,
   } = process.env;
 
   if (!DATABASE_URL) {
@@ -59,5 +61,6 @@ export const loadEnv = (): Env => {
     DATABASE_URL_PUBLIC: DATABASE_URL_PUBLIC ?? undefined,
     MONGODB_URI_PUBLIC: MONGODB_URI_PUBLIC ?? undefined,
     PUBLIC_API_BASE_URL: PUBLIC_API_BASE_URL ?? undefined,
+    TRUST_PROXY: /^(1|true|yes)$/i.test(TRUST_PROXY ?? ""),
   };
 };
